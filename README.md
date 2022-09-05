@@ -1,6 +1,6 @@
 # Uygulamalı Clean Architecture - 101 _(Ubuntu Üstünde .Net 6 Odaklı)_
 
-Applied Clean Architecture. Uygulamalı clean architecture eğitimlerinde kullanılmak üzere oluşturduğum repo. Basit ve hafifsiklet bir projenin temel enstrümanları ile uçtan uca hazırlanmasına yardımcı olan anlatımı içermektedir. Materyal Ubuntu 20.04 sistemini baz almaktadır. Örnek senaryo bir şarkı sözü yazarının bestelerini yönetmek üzerine kurgulanmıştır.
+Applied Clean Architecture. Uygulamalı clean architecture eğitimlerinde kullanılmak üzere oluşturduğum repo. Basit ve hafifsiklet bir projenin temel enstrümanları ile uçtan uca hazırlanmasına yardımcı olan anlatımı içermektedir. Materyal Ubuntu 20.04 sistemini baz almaktadır. Örnek senaryo bir şarkı sözü yazarının bestelerini yönetmek üzerine kurgulanmıştır. Eğitimin süresi 6 dersle sınırlıdır bu nedenle Redis Cache, Serilog, JWT Token ile Authentication entegrasyonları ile proje bazlı Unit Test'ler eklenmemiştir. Referans olarak önceki sürümlerde geliştirilmiş olan [scaling-robot](https://github.com/buraksenyurt/scaling-robot) projesine bakılabilir.
 
 ## Kontrol
 

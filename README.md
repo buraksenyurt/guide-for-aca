@@ -24,9 +24,7 @@ dotnet new sln
 mkdir src
 cd src
 
-mkdir core
-mkdir infrastructure
-mkdir presentation
+mkdir core infrastructure presentation
 
 cd core
 dotnet new classlib -f netstandard2.1 --name BalladMngr.Domain
@@ -75,8 +73,7 @@ dotnet sln add src/presentation/BalladMngr.WebApi/BalladMngr.WebApi.csproj
 cd src
 cd core
 cd BalladMngr.Domain
-mkdir Entities
-mkdir Enums
+mkdir Entities Enums Settings
 cd ..
 cd ..
 
@@ -98,9 +95,8 @@ dotnet add package Microsoft.EntityFrameworkCore.Sqlite
 mkdir Contexts
 
 # Sqlite veri tabanı için migration operasyonları (Gerektiğinde Kullanılacak)
-
-dotnet ef migrations add InitialCreate --startup-project ..\..\presentation\Librarian.WebApi
-dotnet ef database update --startup-project ..\..\presentation\Librarian.WebApi
+dotnet ef migrations add InitialCreate --startup-project ../../presentation/Librarian.WebApi
+dotnet ef database update --startup-project ../../presentation/Librarian.WebApi
 
 cd ..
 cd ..
@@ -124,12 +120,126 @@ npm run serve
 
 Enum sabitleri,
 
-```csharp
+Status.cs
 
+```csharp
+namespace BalladMngr.Domain.Enums
+{
+    //Şarkının güncel durumunu işaret eder.
+    public enum Status
+    {
+        Draft,
+        Completed
+    }
+}
+```
+
+Language.cs
+
+```csharp
+namespace BalladMngr.Domain.Enums
+{
+    // Şarkının hangi dilde olduğunu tutar.
+    // Bestecimiz birden fazla dil biliyor :P
+    public enum Language
+    {
+        English,
+        Turkish,
+        Spanish
+    }
+}
 ```
 
 ve Entity veri yapıları
 
-```csharp
+Song.cs
 
+```csharp
+using BalladMngr.Domain.Enums;
+
+namespace BalladMngr.Domain.Entities
+{
+     // Beste ile ilgili temel bilgileri içerir.
+    public class Book
+    {
+        public int Id { get; set; }
+        public string Title { get; set; }
+        public string Lyrics { get; set; }
+        public Status Status { get; set; }
+        public Language Language { get; set; }
+    }
+}
+```
+
+User.cs
+
+```csharp
+namespace BalladMngr.Domain.Entities
+{
+    // İleride authentication gibi noktalarda kullanacağımız kullanıcı içindir.
+    public class User
+    {
+        public int UserId { get; set; }
+        public string Name { get; set; }
+        public string LastName { get; set; }
+        public string Email { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+    }
+}
+```
+
+Mail gönderim servisi içinde MailSettings.cs
+
+```csharp
+namespace BalladMngr.Domain.Settings
+{
+    /*
+     * Shared projesine eklenecek EmailService, mail gönderme işini üstlenen bir servis.
+     * Mail gönderimi sırasında kimden gittiği, Smtp ayarları gibi bilgileri appSettings.json içeriğinden alsak hiç fena olmaz.
+     * Bu nedenle Domain altına appSettings altındaki MailSettings sekmesini işaret edecek bu sınıf eklendi.
+     */
+    public class MailSettings
+    {
+        public string From { get; set; }
+        public string SmtpHost { get; set; }
+        public int SmtpPort { get; set; }
+        public string SmtpUser { get; set; }
+        public string SmtpPass { get; set; }
+        public string DisplayName { get; set; }
+    }
+}
+```
+
+## 02 - MediatoR Paketinin Eklenmesi ve CQRS Hazırlıkları
+
+```shell
+cd core
+cd BalladMngr.Application
+dotnet add package MediatR
+dotnet add package MediatR.Extensions.Microsoft.DependencyInjection
+dotnet add package Microsoft.Extensions.Logging.Abstractions
+dotnet add package AutoMapper
+dotnet add package AutoMapper.Extensions.Microsoft.DependencyInjection
+
+mkdir Common
+cd Common
+mkdir Behaviors Exceptions Interfaces Mappings
+
+cd ..
+mkdir Dtos
+cd Dtos
+mkdir Songs Email User
+cd ..
+
+mkdir Songs
+cd Songs
+mkdir Commands
+cd Commands
+mkdir CreateSong UpdateSong DeleteSong
+cd ..
+
+mkdir Queries
+cd Queries
+mkdir ExportBooks GetBooks
 ```

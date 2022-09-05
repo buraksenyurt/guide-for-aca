@@ -46,6 +46,7 @@ dotnet add reference ../../core/BalladMngr.Application/BalladMngr.Application.cs
 
 cd ..
 cd BalladMngr.Shared
+mkdir Services
 dotnet add reference ../../core/BalladMngr.Application/BalladMngr.Application.csproj
 
 cd ..
@@ -224,6 +225,7 @@ dotnet add package AutoMapper.Extensions.Microsoft.DependencyInjection
 dotnet add package FluentValidation
 dotnet add package FluentValidation.DependencyInjectionExtensions
 dotnet add package Microsoft.EntityFrameworkCore
+dotnet add package Microsoft.Extensions.Options.ConfigurationExtensions
 
 mkdir Common
 cd Common
@@ -1089,3 +1091,311 @@ namespace BalladMngr.Application.Songs.Commands.UpdateSong
 }
 ```
 
+## 03 - DI Mekanizması ve Shared Geliştirmeleri
+
+DI ayarlamaları için Application projesine DependencyInjection.cs eklenir.
+
+DependencyInjection.cs
+
+```csharp
+using FluentValidation;
+using BalladMngr.Application.Common.Behaviors;
+using MediatR;
+using MediatR.Pipeline;
+using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
+using Microsoft.Extensions.Configuration;
+
+namespace BalladMngr.Application
+{
+    /*
+     * Uygulama katmanının içindeki servisleri kullanan tarafa(örneğin Web API) bildirmek için kullandığımız bir sınıf olarak düşünebiliriz.
+     * IServiceCollection zaten .Net'in dahili DI servislerine ulaşmakta önemli bir aracı.
+     * AutoMapper, MediatR, Validation ve Behavior'ları servisler koleksiyonuna ekleyen bir metot.
+     * 
+     * Bu sınıfı büyük ihtimalle Web API projesinin Startup'ındaki ConfigureServices metodunda kullanacağız. Böylece Web API çalışma zamanına
+     * gerekli DI bağımlılıkları otomatik olarak yüklenmiş olacak.
+     */
+    public static class DependencyInjection
+    {
+        public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
+        {
+            services.AddAutoMapper(Assembly.GetExecutingAssembly());
+            services.AddMediatR(Assembly.GetExecutingAssembly());
+            services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+
+            services.AddTransient(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
+            services.AddTransient(typeof(IRequestPreProcessor<>), typeof(LoggingBehavior<>));
+            services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+            services.AddTransient(typeof(IPipelineBehavior<,>), typeof(UnhandledExceptionBehavior<,>));
+
+            return services;
+        }
+    }
+}
+```
+
+Csv ve email işlemleri için bazı yardımcı paketlerden yararlanacağız. Application tarafında interface olarak tanımlanan bu sözleşmelerinin uygulayıcı Infrastructure katmanındaki Shared isimli kütüphane. Bu nedenle Shared isimli projeye aşağıdaki paketleri eklemeliyiz.
+
+```shell
+dotnet add package CsvHelper
+dotnet add package MailKit
+dotnet add package MimeKit
+```
+
+Şimdi Shared projesinin Services klasörüne CsvBuilder ve EmailService sınıfları eklenir.
+
+CsvBuilder.cs
+
+```csharp
+using CsvHelper;
+using BalladMngr.Application.Songs.Queries.ExportSongs;
+using BalladMngr.Application.Common.Interfaces;
+using System.Globalization;
+
+namespace BalladMngr.Shared.Services
+{
+    /*
+     * Şarkı kaytılarını CSV dosyada geriye veren fonksiyonelliği içeren sınıfımız.
+     * Application içerisinde tanımladığımız servis sözleşmesini uyguladığına dikkat edelim.
+     * Yani servisin sözleşmesi Core katmanındaki Application projesinde, uyarlaması Infrastructure içerisindeki Shared projesinde.
+     */
+    public class CsvBuilder
+        : ICsvBuilder
+    {
+        public byte[] BuildFile(IEnumerable<SongRecord> songRecords)
+        {
+            using (var ms = new MemoryStream())
+            {
+                using (var writer = new StreamWriter(ms))
+                {
+                    using var csvWriter = new CsvWriter(writer, CultureInfo.InvariantCulture);
+                    csvWriter.WriteRecords(songRecords);
+                }
+                return ms.ToArray();
+            }
+        }
+    }
+}
+```
+
+EmailService.cs
+
+```csharp
+using BalladMngr.Application.Common.Exceptions;
+using BalladMngr.Application.Common.Interfaces;
+using BalladMngr.Application.Dtos.Email;
+using BalladMngr.Domain.Settings;
+using MailKit.Net.Smtp;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using MimeKit;
+
+namespace BalladMngr.Shared.Services
+{
+    /*
+     * Mail gönderme işini yapan asıl sınıf.
+     * Tahmin edileceği üzere tüm servis sözleşmelerinin olduğu Core katmanındaki Application projesindeki arayüzü kullanıyor.
+     * Loglama ve Email sunucu ayarlarını almak için gerekli bağımlılıklar Constructor üzerinden enjekte edilmekte.
+     * SendAsync metodu EmailDto isimli Data Transfer Object üstünden gelen bilgilerdeki kişiye mail olarak gönderiyor.
+     * Mail gönderimi sırasında bir istisna olması oldukça olası. Sonuçta bir SMTP sunucum bile yok. 
+     * Bunu hata loglarında veya exception tablosunda ayrıca anlayabilmek için SendMailException isimli bir istisna tipi kullanılıyor.
+     */
+    public class EmailService
+        : IEmailService
+    {
+        private ILogger<EmailService> _logger { get; }
+        private MailSettings _mailSettings { get; }
+
+        public EmailService(IOptions<MailSettings> mailSettings, ILogger<EmailService> logger)
+        {
+            _mailSettings = mailSettings.Value;
+            _logger = logger;
+        }
+
+        public async Task SendAsync(EmailDto request)
+        {
+            try
+            {
+                var email = new MimeMessage
+                {
+                    Sender = MailboxAddress.Parse(request.From ?? _mailSettings.From)
+                };
+                email.To.Add(MailboxAddress.Parse(request.To));
+                email.Subject = request.Subject;
+                var builder = new BodyBuilder { HtmlBody = request.Body };
+                email.Body = builder.ToMessageBody();
+
+                using var smtp = new SmtpClient();
+                await smtp.SendAsync(email);
+                await smtp.DisconnectAsync(true);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.LogError(ex.Message, ex);
+                throw new SendEmailException(ex.Message);
+            }
+        }
+    }
+}
+```
+
+Sırada Shader kütüphanesi için gereki DI mekanizmasının entegrasyonu var. Bunun için projeye DependencyInjection sınıfını ekliyoruz.
+
+DependencyInjection.cs
+
+```csharp
+using BalladMngr.Application.Common.Interfaces;
+using BalladMngr.Domain.Settings;
+using BalladMngr.Shared.Services;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace BalladMngr.Shared
+{
+    /*
+     * 
+     * Çağıran ortamdaki DI servislerine Shared tarafından gelen bağımlılıkları yüklememizi kolaylaştıran sınıf.
+     * BalladMngr.Application'daki DependencyInjection sınıfı ile aynı teoriyi kullanıyor ve yine
+     * kuvvetle muhtemel buradaki servisleri tüketecek olan Web API projesindeki Startup sınıfındaki ConfigureServices içinden çağırılacak
+     */
+    public static class DependencyInjection
+    {
+        public static IServiceCollection AddShared(this IServiceCollection services, IConfiguration config)
+        {
+            services.Configure<MailSettings>(config.GetSection("MailSettings"));
+            services.AddTransient<IEmailService, EmailService>();
+            services.AddTransient<ICsvBuilder, CsvBuilder>();
+
+            return services;
+        }
+    }
+}
+```
+
+## 04 - Data Tarafının Organizasyonu ve EF Migration İşleri
+
+İlk olarak Context tiplerini eklemeliyiz.
+
+BalladMngrDbContext.cs
+
+```csharp
+using BalladMngr.Application.Common.Interfaces;
+using BalladMngr.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace BalladMngr.Data.Contexts
+{
+    /*
+     * DbContext nesnesi.
+     * IApplicationDbContext türetmesine de dikkat edelim. Core.Application katmanındaki sözleşmeyi kullanıyoruz.
+     * Bu DI servislerine Entity Context nesnesini eklerken işimize yarayacak.
+     * 
+     */
+    public class BalladMngrDbContext
+        : DbContext, IApplicationDbContext
+    {
+        public BalladMngrDbContext(DbContextOptions<BalladMngrDbContext> options)
+            : base(options)
+        {
+        }
+
+        public DbSet<Song> Songs { get; set; }
+    }
+}
+```
+
+Örnek verilerin girilmesini sağlayacak birde Seed sınıfı ekleyelim.
+
+BalladMngrDbContextSeed.cs
+
+```csharp
+using BalladMngr.Domain.Entities;
+using BalladMngr.Domain.Enums;
+
+namespace BalladMngr.Data.Contexts
+{
+    /*
+     * Seed operasyonu için kullanılan statik sınıfımız.
+     * Eğer hiç şarkı yoksa birkaç tane ekleyecek.
+     */
+    public static class BalladMngrDbContextSeed
+    {
+        public static async Task SeedDataAsync(BalladMngrDbContext context)
+        {
+            if (!context.Songs.Any())
+            {
+                await context.Songs.AddAsync(new Song
+                {
+                    Title = "The Wall",
+                    Lyrics = @"We don't need no education
+                                We don't need no thought control
+                                No dark sarcasm in the classroom
+                                Teacher, leave them kids alone",
+                    Language = Language.English,
+                    Status = Status.Draft
+                });
+                await context.Songs.AddAsync(new Song
+                {
+                    Title = "Mazeretim Var Asabiyim Ben",
+                    Lyrics = @"Gülmüyor yüzüm hayat zor oldu
+                                Güller susuz kurudu soldu
+                                Tövbe ettim gene bozuldu
+                                Yüreğim yanar
+                                Mazeretim var; asabiyim ben
+                                Mazeretim var; asabiyim ben",
+                    Language = Language.Turkish,
+                    Status = Status.Completed
+                });
+                await context.Songs.AddAsync(new Song
+                {
+                    Title = "Dönence",
+                    Lyrics = @"Simsiyah gecenin koynundayım yapayalnız
+                                Uzaklarda bir yerlerde güneşler doğuyor
+                                Biliyorum
+                                Dönence",
+                    Language = Language.Turkish,
+                    Status = Status.Draft
+                });
+                await context.SaveChangesAsync();
+            }
+        }
+    }
+}
+```
+
+Diğer katmanlarda olduğu gibi burada da bağımlılıkları DI mekanizması ile çalışma zamanı için çözümleyeceğiz.
+
+DependencyInjection.cs
+
+```csharp
+using BalladMngr.Application.Common.Interfaces;
+using BalladMngr.Data.Contexts;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace BalladMngr.Data
+{
+    /*
+     * Çalışma zamanı DI servislerini Entity Framework DbContext türevimizi eklemek için kullanılan sınıf.
+     * 
+     */
+    public static class DependencyInjection
+    {
+        public static IServiceCollection AddData(this IServiceCollection services,IConfiguration configuration)
+        {
+            services.AddDbContext<BalladMngrDbContext>(
+                options => options.UseSqlite(configuration.GetConnectionString("BalladMngrDbConnection")) // SQLite veri tabanı bağlantı bilgisi konfigurasyon üstünden gelecek. Web API' nin appSettings.json dosyasından
+                );
+
+            // services.AddDbContext<BalladMngrDbContext>(
+            //     options => options.UseSqlServer(configuration.GetConnectionString("BalladMngrDbConnection"))
+            //     );
+
+            services.AddScoped<IApplicationDbContext>(provider => provider.GetService<BalladMngrDbContext>());
+            return services;
+        }
+    }
+}
+```

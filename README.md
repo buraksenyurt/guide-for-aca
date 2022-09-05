@@ -1,4 +1,4 @@
-# Uygulamalı Clean Architecture - 101
+# Uygulamalı Clean Architecture - 101 _(Ubuntu Üstünde .Net 6 Odaklı)_
 
 Applied Clean Architecture. Uygulamalı clean architecture eğitimlerinde kullanılmak üzere oluşturduğum repo. Basit ve hafifsiklet bir projenin temel enstrümanları ile uçtan uca hazırlanmasına yardımcı olan anlatımı içermektedir. Materyal Ubuntu 20.04 sistemini baz almaktadır. Örnek senaryo bir şarkı sözü yazarının bestelerini yönetmek üzerine kurgulanmıştır.
 
@@ -84,7 +84,6 @@ dotnet tool install --global dotnet-ef
 
 cd presentation
 cd BalladMngr.WebApi
-
 dotnet add package Microsoft.EntityFrameworkCore.Design
 
 cd ..
@@ -96,8 +95,8 @@ dotnet add package Microsoft.EntityFrameworkCore.Sqlite
 mkdir Contexts
 
 # Sqlite veri tabanı için migration operasyonları (Gerektiğinde Kullanılacak)
-dotnet ef migrations add InitialCreate --startup-project ../../presentation/Librarian.WebApi
-dotnet ef database update --startup-project ../../presentation/Librarian.WebApi
+dotnet ef migrations add InitialCreate --startup-project ../../presentation/BalladMngr.WebApi
+dotnet ef database update --startup-project ../../presentation/BalladMngr.WebApi
 
 cd ..
 cd ..
@@ -696,7 +695,128 @@ namespace BalladMngr.Application.Songs.Queries.ExportSongs
 }
 ```
 
-Email gönderim servisi ve authentication tarafı için Dtos altına gerekli Dto veri yapılarını da ekleyelim.
+Şarkı bilgilerini çekmek için kullanılacak query nesneleri de GetSongs klasörü altına eklenecekler. 
+
+Ama öncesinde ilgili Dto nesnesi de eklemeli.
+
+SongDto.cs
+
+```csharp
+SongDto.cs
+
+```csharp
+using AutoMapper;
+using BalladMngr.Application.Common.Mappings;
+using BalladMngr.Domain.Entities;
+
+namespace BalladMngr.Application.Dtos.Songs
+{
+    /*
+     * Bu aslında bir Data Transfer Object tipi.
+     * 
+     * Controller tarafından gelen istekleri ele alan MediatR nesneleri doğrudan Song tipi ile değil de,
+     * Daha az özelliği içeren SongDto tipi ile çalışıyor. Son kullanıcıya da bu içerik verilecek.
+     * 
+     * Genelde Entity tipleri dolaşıma girdiğinde tüm özelliklerini sunmak istemediğimiz senaryolara dahil olabilir.
+     * ViewModel'in bu durumlarda tüm entity nesnesi ile çalışmak yerine gerçekten ihtiyaç duyduğu özellikleri barındıran bir nesne ile çalışması doğru yaklaşımdır.
+     * 
+     * Bu DTO IMapFrom<T> arayüzünü kullanır. Bu kısım aslında AutoMapper'ın ilgilendiği arayüzdür.
+     * IMapFrom içindeki Mapping metodu burada ele alınmış ve Language özelliği için ekstra bir işlem eklenmiştir.
+     */
+    public class SongDto
+        : IMapFrom<Song>
+    {
+        public int Id { get; set; }
+        public string Title { get; set; }
+        public string Lyrics { get; set; }
+        public int Language { get; set; }
+        public void Mapping(Profile profile)
+        {
+            profile.CreateMap<Song, SongDto>()
+                .ForMember(dest => dest.Language
+                    , opt => opt.MapFrom(source => (int)source.Language)
+                    );
+        }
+    }
+}
+```
+
+SongsViewModel.cs
+
+```csharp
+
+using BalladMngr.Application.Dtos.Songs;
+using System.Collections.Generic;
+
+namespace BalladMngr.Application.Songs.Queries.GetSongs
+{
+    /*
+     * Şarkı listesinin tamamını çeken Query'nin çalıştığı ViewModel nesnesi
+     * 
+     */
+    public class SongsViewModel
+    {
+        public IList<SongDto> SongList { get; set; }
+    }
+}
+```
+
+ve GetSongsQuery.cs
+
+```csharp
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using BalladMngr.Application.Common.Interfaces;
+using BalladMngr.Application.Dtos.Songs;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace BalladMngr.Application.Songs.Queries.GetSongs
+{
+    /*
+     * Query ile tüm şarkı listesinin çekilmesi sürecini ele alıyoruz.
+     * 
+     * Talebe karşılık SongsViewModel nesnesi dönülüyor ki o da içinde SongDto tipinden bir liste barındırmakta.
+     * 
+     */
+    public class GetSongsQuery
+        : IRequest<SongsViewModel>
+    {
+    }
+
+    public class GetSongsQueryHandler
+        : IRequestHandler<GetSongsQuery, SongsViewModel>
+    {
+        private readonly IApplicationDbContext _context;
+        private readonly IMapper _mapper;
+        public GetSongsQueryHandler(IApplicationDbContext context, IMapper mapper)
+        {
+            _context = context;
+            _mapper = mapper;
+        }
+        public async Task<SongsViewModel> Handle(GetSongsQuery request, CancellationToken cancellationToken)
+        {
+            SongsViewModel Songs;
+
+            Songs = new SongsViewModel
+            {
+                SongList = await _context
+                .Songs
+                .ProjectTo<SongDto>(_mapper.ConfigurationProvider)
+                .OrderBy(b => b.Title)
+                .ToListAsync(cancellationToken)
+            }; // normal EF üstünden repository'ye gidip veriyi çekiyor
+
+            return Songs;
+        }
+    }
+}
+```
+
+Email gönderim servisi ve authentication tarafı için Dtos klasörü altına gerekli Dto veri yapılarını da ekleyelim.
 
 EmailDto.cs
 
@@ -761,47 +881,6 @@ namespace BalladMngr.Application.Dtos.User
             Username = user.Username;
             Email = user.Email;
             Token = token;
-        }
-    }
-}
-```
-
-Diğer yandan şarkılar için de bir Dto nesnesi ekleyebiliriz.
-
-SongDto.cs
-
-```csharp
-using AutoMapper;
-using BalladMngr.Application.Common.Mappings;
-using BalladMngr.Domain.Entities;
-
-namespace BalladMngr.Application.Dtos.Songs
-{
-    /*
-     * Bu aslında bir Data Transfer Object tipi.
-     * 
-     * Controller tarafından gelen istekleri ele alan MediatR nesneleri doğrudan Song tipi ile değil de,
-     * Daha az özelliği içeren SongDto tipi ile çalışıyor. Son kullanıcıya da bu içerik verilecek.
-     * 
-     * Genelde Entity tipleri dolaşıma girdiğinde tüm özelliklerini sunmak istemediğimiz senaryolara dahil olabilir.
-     * ViewModel'in bu durumlarda tüm entity nesnesi ile çalışmak yerine gerçekten ihtiyaç duyduğu özellikleri barındıran bir nesne ile çalışması doğru yaklaşımdır.
-     * 
-     * Bu DTO IMapFrom<T> arayüzünü kullanır. Bu kısım aslında AutoMapper'ın ilgilendiği arayüzdür.
-     * IMapFrom içindeki Mapping metodu burada ele alınmış ve Language özelliği için ekstra bir işlem eklenmiştir.
-     */
-    public class SongDto
-        : IMapFrom<Song>
-    {
-        public int Id { get; set; }
-        public string Title { get; set; }
-        public string Lyrics { get; set; }
-        public int Language { get; set; }
-        public void Mapping(Profile profile)
-        {
-            profile.CreateMap<Song, SongDto>()
-                .ForMember(dest => dest.Language
-                    , opt => opt.MapFrom(source => (int)source.Language)
-                    );
         }
     }
 }
@@ -1399,3 +1478,234 @@ namespace BalladMngr.Data
     }
 }
 ```
+
+## 05 - Web API Projesi için Hazırlıklar
+
+Controller tarafında gerekli sınıfları ekleyelim.
+
+SongsController.cs
+
+```csharp
+using BalladMngr.Application.Songs.Commands.CreateSong;
+using BalladMngr.Application.Songs.Commands.DeleteSong;
+using BalladMngr.Application.Songs.Commands.UpdateSong;
+using BalladMngr.Application.Songs.Queries.GetSongs;
+using MediatR;
+using Microsoft.AspNetCore.Mvc;
+
+namespace BalladMngr.WebApi.Controllers
+{
+    /*
+     * SongsController, şarkı ekleme, silme, güncelleme ve şarkı listesini ViewModel ölçütünde çekme işlemlerini üstleniyor.
+     * 
+     * Constructor üstünden MediatR modülünün enjekte edildiğini görebiliyoruz.
+     * 
+     * Önceki versiyonuna göre en büyük fark elbetteki metotlarda Query/Command nesnelerinin kullanılması.
+     * 
+     * Ayrıca fonksiyon içeriklerine bakıldığında yapılan tek şey Send ile ilgili komutu MeditaR'a yönlendirmek. O gerisini halleder
+     * 
+     */
+    [Route("api/[controller]")]
+    [ApiController]
+    public class SongsController : ControllerBase
+    {
+        private readonly IMediator _mediator;
+        public SongsController(IMediator mediator)
+        {
+            _mediator = mediator;
+        }
+
+        [HttpGet]
+        public async Task<ActionResult<SongsViewModel>> Get()
+        {
+            return await _mediator.Send(new GetSongsQuery());
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<int>> Create(CreateSongCommand command)
+        {
+            return await _mediator.Send(command);
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<ActionResult> Delete(int id)
+        {
+            await _mediator.Send(new DeleteSongCommand { SongId = id });
+            return NoContent();
+        }
+
+        [HttpPut("{id}")]
+        public async Task<ActionResult> Update(int id, UpdateSongCommand command)
+        {
+            if (id != command.SongId)
+                return BadRequest();
+            await _mediator.Send(command);
+
+            return NoContent();
+        }
+    }
+}
+```
+
+ExportController.cs (CSV Export tarafı için)
+
+```csharp
+using BalladMngr.Application.Songs.Queries.ExportSongs;
+using MediatR;
+using Microsoft.AspNetCore.Mvc;
+
+namespace BalladMngr.WebApi.Controllers
+{
+    /*
+     * Şarkı listesini CSV formatında export etmemizi sağlayan Controller.
+     * 
+     * SongsController'da olduğu gibi MediatR kullanıyor ve CSV çıktısı için ilgili Query komutunu işletiyor.
+     */
+    [Route("api/[controller]")]
+    [ApiController]
+    public class ExportController 
+        : ControllerBase
+    {
+        private readonly IMediator _mediator;
+        public ExportController(IMediator mediator)
+        {
+            _mediator = mediator;
+        }
+
+        [HttpGet]
+        public async Task<FileResult> Get()
+        {
+            var model = await _mediator.Send(new ExportSongsQuery());
+            return File(model.Content, model.ContentType, model.FileName);
+        }
+    }
+}
+```
+
+UserController.cs (Auth tarafı için)
+
+```csharp
+using BalladMngr.Application.Common.Interfaces;
+using BalladMngr.Application.Dtos.User;
+using Microsoft.AspNetCore.Mvc;
+
+namespace BalladMngr.WebApi.Controllers
+{
+    /*
+     * Kullanıcı doğrulama işini üstlenen controller tipidir.
+     * Authenticat fonksiyonu /auth talebi ile çalışır ve Body içeriği ile gelen model nesnesindeki kullanıcı adı şifre üstünden UserService'e gidilir.
+     * Geçerli bir kullanıcı ise tamam ama değilse HTTP 400 Bad Request hatası basarız.
+     */
+    [ApiController]
+    [Route("api/[controller]")]
+    public class UserController
+        : ControllerBase
+    {
+        private readonly IUserService _userService;
+        public UserController(IUserService userService) => _userService = userService;
+
+        [HttpPost("auth")]
+        public IActionResult Authenticate([FromBody] AuthenticationRequest model)
+        {
+            var response = _userService.Authenticate(model);
+
+            if (response == null)
+                return BadRequest(new
+                {
+                    message = "Kullanıcı adın ya da şifren hatalı!"
+                });
+
+            return Ok(response);
+        }
+    }
+}
+```
+
+program.cs içeriği aşağıdaki gibi düzenlenir.
+
+```csharp
+using BalladMngr.Application;
+using BalladMngr.Data;
+using BalladMngr.Data.Contexts;
+using BalladMngr.Shared;
+
+var builder = WebApplication.CreateBuilder(args);
+
+ConfigurationManager configuration = builder.Configuration;
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+/*
+* Web API'nin çalışma zamanının ihtiyaç duyacağı Application,Data(Entity Framework context'ini alacak) ve Shared servislerini 
+* aşağıdaki metotlar yardımıyla ekliyoruz.
+* 
+* İlgili servisleri burada da açık bir şekilde ekleyebilirdik ancak yapmadık. 
+* Bu sayede o kütüphanelerin servislerinin DI koleksiyonuna eklenme işini buradan soyutlamış olduk.
+* Orada servislerde bir değişiklik olursa buraya gelip bir şeyler yapmamıza gerek kalmayacak.
+* 
+*/
+builder.Services.AddApplication(configuration);
+builder.Services.AddData(configuration);
+builder.Services.AddShared(configuration);
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<BalladMngrDbContext>();
+    await BalladMngrDbContextSeed.SeedDataAsync(context);
+}
+
+app.Run();
+```
+
+appsettings.json'da aşağıdaki gibi düzenlenir.
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "ConnectionStrings": {
+    "BalladMngrDbConnection": "Data Source=BalladMngrDatabase.sqlite3"
+  },
+  "MailSettings": {
+    "From": "admin@blabal.bla",
+    "SmtpHost": "localhost",
+    "SmtpPort": "",
+    "SmtpPass": "",
+    "DisplayName": "Administrator"
+  },
+  "AllowedHosts": "*"
+}
+```
+
+Api uygulamasını test etmeden önce Sqlite tarafı için gerekli migration işlemlerini başlatmak gerekecektir. Bunun için Infrastructure katmanındaki Data projesi klasöründeyken aşağıdaki komutlar çalıştırılır.
+
+```shell
+dotnet ef migrations add InitialCreate --startup-project ../../presentation/BalladMngr.WebApi
+dotnet ef database update --startup-project ../../presentation/BalladMngr.WebApi
+```
+
+Bu işlemler sonucunda Data projesinde Migration klasörü, WebApi projesinde de sqlite3 uzantılı veri tabanı dosyası oluşur. Kontrol için bir Sqlite görüntüleme eklentisinden yararlanılabilir. Ayrıca web api projesi çalıştırıldıktan sonra https://localhost:7008/swagger/index.html adresine gidilerek ilgili testler yapılabilir.

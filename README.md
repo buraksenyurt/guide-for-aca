@@ -105,13 +105,24 @@ cd ..
 sudo npm install -g @vue/cli
 
 cd presentation
-# Presentation klasörü altındayken vue projesi oluşturulur
-vue create ballad-mngr-app
+npm install -g @vue/cli
 
-cd ballad-mngr-app
-# ballad-mngr-app klasöründeyken aşağıdaki komut çalıştırılır
+# Presentation klasörü altındayken vue projesi oluşturulur
+vue create web-app
+
+# > Manually select features
+# İzleyen kısımda yapılacak seçimler (Choose Vue Version, Babel, Router, Vuex, Linter/Formatter)
+# Version olarak 2.x seçilir ki 3.x ile denemek lazım
+# Use history mode for router sorusuna Y(Yes) cevabı verilir
+# Ardından ESLint + Prettier seçilir
+# List on save seçili bırakılır
+# In dedicated config files seçili bırakılır
+
+# Material Design yaklaşımına uygun olarak vuetify kütüphanesi eklendi
+# librarian-app klasöründeyken aşağıdaki komut çalıştırılır
 vue add vuetify
 
+# Default(recommended) ile ilerlenir
 # Aşağıdaki komut ile vue tarafının çalıştığından emin olunur
 npm run serve
 ```
@@ -1710,9 +1721,25 @@ dotnet ef database update --startup-project ../../presentation/BalladMngr.WebApi
 
 Bu işlemler sonucunda Data projesinde Migration klasörü, WebApi projesinde de sqlite3 uzantılı veri tabanı dosyası oluşur. Kontrol için bir Sqlite görüntüleme eklentisinden yararlanılabilir. Ayrıca web api projesi çalıştırıldıktan sonra https://localhost:7008/swagger/index.html adresine gidilerek ilgili testler yapılabilir.
 
-## 06 - Vue Tarafındaki Geliştirmeleri
+## 06 - Vue Tarafındaki Geliştirmeler
 
-İlk olarak src klasörü altına validators isimli bir klasör açıp index.js dosyasını ekleyelim.
+```bash
+# Servis haberleşmesi için axios kullanacağız bu nedenle ilgili paketi install etmeliyiz
+# Bunu tabii ki ballad-mngr-app klasörü altında çalıştırmalıyız.
+sudo npm i axios
+
+sudo npm i vuelidate
+```
+
+vuelidate kullanımı için plugins klasörüne vuelidate.js eklenmelidir.
+
+```js
+import Vue from "vue";
+import Vuelidate from "vuelidate";
+Vue.use(Vuelidate);
+```
+
+Doğrulama opsiyonları için src klasörü altına validators isimli bir klasör açıp index.js dosyasını ekleyelim.
 
 ```js
 import {
@@ -1735,7 +1762,7 @@ export default {
 
 Temel komponentleri ekleyelim. Bileşenleri components klasörü altına ekleyeceğiz.
 
-AddSongsForm.vue
+AddSongForm.vue
 
 ```vue
 <template>
@@ -1843,7 +1870,7 @@ AddSongsForm.vue
                 !this.$v.body.title.maxLength && errors.push("En fazla 50 karakter.");
                 return errors;
             },
-            publisherErrors() {
+            lyricsErrors() {
                 const errors = [];
                 if (!this.$v.body.lyrics.$dirty) return errors;
                 !this.$v.body.lyrics.required && errors.push("Lütfen şarkı sözlerini gir.");
@@ -1855,8 +1882,7 @@ AddSongsForm.vue
         validations: {
             body: {
                 title: validators.addSong.title,
-                publisher: validators.addSong.publisher,
-                authors: validators.addSong.authors
+                lyrics: validators.addSong.lyrics,
             }
         }
     };
@@ -1902,7 +1928,7 @@ SongListCard.vue
         name: "SongListCard",
         computed: {
             ...mapGetters("songModule", {
-                books: "songs",
+                songs: "songs",
                 loading: "loading",
             }),
         },
@@ -1961,19 +1987,7 @@ NavigationBar.vue
   </style>
 ```
 
-src altına Views isimli bir klasör açalım.
-
-```bash
-cd src
-mkdir views
-cd views
-touch About.vue Home.vue
-mkdir dashboard
-cd dashboard
-touch SongList.vue DefaultContent.vue index.vue
-```
-
-ve bu view nesnelerini yazalım.
+Views isimli klasör altında dashboard isimli bir klasör açalım. Ardından buraya aşağıdaki view nesnelerini ekleyelim.
 
 SongList.vue
 
@@ -2087,7 +2101,7 @@ DefaultContent.vue
             bookId: 0
         }),
         mounted() {
-            this.getSongssAction();
+            this.getSongsAction();
             this.showSongs = false;
         },
     };
@@ -2165,7 +2179,7 @@ index.vue
   </style>
 ```
 
-About.vue
+AboutView.vue' yu şöyle değiştirelim.
 
 ```vue
 <template>
@@ -2178,7 +2192,7 @@ About.vue
   </template>
   ```
 
-Home.vue
+HomeView.vue'yu da şöyle.
 
 ```vue
 <template>
@@ -2224,9 +2238,7 @@ let api = axios.create({ baseURL });
 export default api;
 ```
 
-src altına router klasörü açılır ve index.js dosyası eklenir.
-
-index.js
+router klasöründeki index.js'i aşağıdaki gibi değiştirelim.
 
 ```js
 import Vue from "vue";
@@ -2279,12 +2291,10 @@ const router = new VueRouter({
 export default router;
 ```
 
-src klasörü altına store klasörü ve alt elemanları eklenir.
+store klasörü içeriğini aşağıdaki gibi düzenleyelim.
 
 ```bash
-mkdir store
 cd store
-touch index.js
 mkdir song
 cd song
 touch action-types.js actions.js getters.js mutations.js services.js state.js index.js
@@ -2316,8 +2326,8 @@ mutations.js
 import * as actionTypes from "./action-types";
 
 const mutations = {
-    [actionTypes.GET_SONGS](state, books) {
-        state.songs = books;
+    [actionTypes.GET_SONGS](state, songs) {
+        state.songs = songs;
     },
 
     [actionTypes.LOADING_SONGS](state, value) {
@@ -2518,3 +2528,84 @@ new Vue({
 }).$mount("#app");
 ```
 
+# 07 Web Api tarafından Vue'nun Otomatik Olarak Çalışması
+
+Web Api ve Vue tarafının Single Page Application olarak çalışması için bir şeyler yapabiliriz. Öncelikle WebApi projesinde ilgili paketi eklemek lazım.
+
+```bash
+dotnet add package VueCliMiddleware
+```
+
+Ardından WebApi projesinde program.cs'de bazı değişiklikler gerekiyor. Program.cs'in son hali şöyle olacaktır.
+
+```csharp
+using BalladMngr.Application;
+using BalladMngr.Data;
+using BalladMngr.Data.Contexts;
+using BalladMngr.Shared;
+using VueCliMiddleware;
+
+var builder = WebApplication.CreateBuilder(args);
+
+var configuration = builder.Configuration;
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+builder.Services.AddSpaStaticFiles(configuration =>
+{
+    configuration.RootPath = "../web-app/dist";
+});
+
+/*
+* Web API'nin çalışma zamanının ihtiyaç duyacağı Application,Data(Entity Framework context'ini alacak) ve Shared servislerini 
+* aşağıdaki metotlar yardımıyla ekliyoruz.
+* 
+* İlgili servisleri burada da açık bir şekilde ekleyebilirdik ancak yapmadık. 
+* Bu sayede o kütüphanelerin servislerinin DI koleksiyonuna eklenme işini buradan soyutlamış olduk.
+* Orada servislerde bir değişiklik olursa buraya gelip bir şeyler yapmamıza gerek kalmayacak.
+* 
+*/
+builder.Services.AddApplication(configuration);
+builder.Services.AddData(configuration);
+builder.Services.AddShared(configuration);
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<BalladMngrDbContext>();
+    await BalladMngrDbContextSeed.SeedDataAsync(context);
+}
+
+app.UseSpa(spa =>
+{
+    spa.Options.SourcePath = "../ballad-mngr-app";
+
+    if (app.Environment.IsDevelopment())
+    {
+        spa.UseVueCli(npmScript: "serve"); // npm run server komutunu tetikler
+    }
+});
+
+app.Run();
+```
+
+Şu aşamada sistemi ayağa kaldırmak için WebApi projesindeyken dotnet run komutunu verebiliriz.

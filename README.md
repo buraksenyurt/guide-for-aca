@@ -1709,3 +1709,812 @@ dotnet ef database update --startup-project ../../presentation/BalladMngr.WebApi
 ```
 
 Bu işlemler sonucunda Data projesinde Migration klasörü, WebApi projesinde de sqlite3 uzantılı veri tabanı dosyası oluşur. Kontrol için bir Sqlite görüntüleme eklentisinden yararlanılabilir. Ayrıca web api projesi çalıştırıldıktan sonra https://localhost:7008/swagger/index.html adresine gidilerek ilgili testler yapılabilir.
+
+## 06 - Vue Tarafındaki Geliştirmeleri
+
+İlk olarak src klasörü altına validators isimli bir klasör açıp index.js dosyasını ekleyelim.
+
+```js
+import {
+    required,
+    minLength,
+    maxLength
+} from "vuelidate/lib/validators";
+
+export default {
+    addSong: {
+        title: {
+            required, maxLength: maxLength(50)
+        },
+        lyrics: {
+            required, minLength: minLength(50), maxLength: maxLength(1000)
+        },
+    }
+};
+```
+
+Temel komponentleri ekleyelim. Bileşenleri components klasörü altına ekleyeceğiz.
+
+AddSongsForm.vue
+
+```vue
+<template>
+    <v-row justify="center">
+        <v-dialog v-model="dialog" persistent max-width="600px">
+            <template v-slot:activator="{ on, attrs }">
+                <v-btn style="margin-top: 1rem"
+                       rounded
+                       color="light-blue"
+                       dark
+                       v-bind="attrs"
+                       v-on="on">
+                    <v-icon left>mdi-plus</v-icon>
+                    Koleksiyona yeni bir beste ekle.
+                </v-btn>
+            </template>
+            <v-card>
+                <form @submit.prevent="
+            addSongAction(body);
+            body = {};
+          ">
+                    <v-card-title>
+                        <span class="headline">Şarkı Bilgileri</span>
+                    </v-card-title>
+                    <v-card-text>
+                        <v-container>
+                            <v-row>
+                                <v-col cols="12" sm="6">
+                                    <v-text-field label="Adı"
+                                                  v-model="body.title"
+                                                  @input="$v.body.title.$touch()"
+                                                  @blur="$v.body.title.$touch()"
+                                                  :error-messages="titleErrors"
+                                                  required></v-text-field>
+                                </v-col>
+                                <v-col cols="12">
+                                    <v-textarea label="Sözleri"
+                                                v-model="body.lyrics"
+                                                @input="$v.body.lyrics.$touch()"
+                                                @blur="$v.body.lyrics.$touch()"
+                                                :error-messages="lyricsErrors"
+                                                required></v-textarea>
+                                </v-col>
+
+                                <v-col cols="12" sm="6">
+                                    <v-select v-model="body.language"
+                                              :items="languages"
+                                              item-text="name"
+                                              item-value="id"
+                                              label="Dili"
+                                              persistent-hint
+                                              return-object
+                                              single-line>
+                                    </v-select>
+                                </v-col>
+                            </v-row>
+                        </v-container>
+                    </v-card-text>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn color="blue darken-1" text @click="dialog = false">
+                            Close
+                        </v-btn>
+                        <v-btn color="blue darken-1"
+                               text
+                               @click="dialog = false"
+                               :disabled="$v.$anyError"
+                               type="submit">
+                            Save
+                        </v-btn>
+                    </v-card-actions>
+                </form>
+            </v-card>
+        </v-dialog>
+    </v-row>
+</template>
+
+<script>
+    import { mapActions } from "vuex";
+    import validators from "@/validators";
+    export default {
+        name: "AddSongForm",
+        data: () => ({
+            body: {
+                title: "",
+                lyrics: "",
+                language: 1
+            },
+            dialog: false,
+            languages: [
+                { id: 0, name: "İngilizce" }
+                , { id: 1, name: "Türkçe" }
+                , { id: 2, name: "İspanyolca" }
+            ]
+        }),
+        methods: {
+            ...mapActions("SongModule", ["addSongAction"]),
+        },
+        computed: {
+            titleErrors() {
+                const errors = [];
+                if (!this.$v.body.title.$dirty)
+                    return errors;
+                !this.$v.body.title.required && errors.push("Lütfen şarkının adını yaz.");
+                !this.$v.body.title.maxLength && errors.push("En fazla 50 karakter.");
+                return errors;
+            },
+            publisherErrors() {
+                const errors = [];
+                if (!this.$v.body.lyrics.$dirty) return errors;
+                !this.$v.body.lyrics.required && errors.push("Lütfen şarkı sözlerini gir.");
+                !this.$v.body.lyrics.minLength && errors.push("En az 50 karakter olsun");
+                !this.$v.body.lyrics.maxLength && errors.push("En fazla 1000 karakter.");
+                return errors;
+            },
+        },
+        validations: {
+            body: {
+                title: validators.addSong.title,
+                publisher: validators.addSong.publisher,
+                authors: validators.addSong.authors
+            }
+        }
+    };
+</script>
+```
+
+SongListCard.vue
+
+```Vue
+<template>
+
+    <v-skeleton-loader v-if="loading"
+                       width="500"
+                       max-width="600"
+                       height="100%"
+                       type="card"></v-skeleton-loader>
+
+    <v-card v-else width="500" max-width="600" height="100%">
+        <v-toolbar color="pink" dark>
+            <v-toolbar-title>Besteler</v-toolbar-title>
+            <v-spacer></v-spacer>
+        </v-toolbar>
+        <v-list-item-group color="primary">
+            <v-list-item v-for="song in songs" :key="song.id">
+                <v-list-item-content>
+                    <v-list-item-title v-text="song.title"></v-list-item-title>
+                    <v-list-item-subtitle v-text="song.status"></v-list-item-subtitle>
+                </v-list-item-content>
+                <v-list-item-action>
+                    <v-icon @click="removeSong(song.id)">
+                        mdi-delete-outline
+                    </v-icon>
+                </v-list-item-action>
+            </v-list-item>
+        </v-list-item-group>
+    </v-card>
+</template>
+
+
+<script>
+    import { mapActions, mapGetters } from "vuex";
+    export default {
+        name: "SongListCard",
+        computed: {
+            ...mapGetters("songModule", {
+                books: "songs",
+                loading: "loading",
+            }),
+        },
+        methods: {
+            ...mapActions("songModule", ["removeSongAction"]),
+            removeSong(songId) {
+                const confirmed = confirm(
+                    "Bu besteyi silmek istediğine emin misin?"
+                );
+                if (!confirmed) return;
+                this.removeSongAction(bookId);
+            },
+        },
+    };
+</script>
+```
+
+NavigationBar.vue
+
+```Vue
+<template>
+    <v-app-bar app color="primary" light>
+      <div>
+        <v-btn color="primary" outlined :to="{ path: '/' }">
+          <span class="menu">Lobi</span>
+        </v-btn>
+  
+        <router-link to="/about">
+          <v-btn color="primary" outlined>
+            <span class="menu">Bilgi</span>
+          </v-btn>
+        </router-link>
+
+        <v-btn
+          color="primary"
+          outlined
+          :to="{ path: '/dashboard' }"
+        >
+          <span class="menu">Besteler</span>
+        </v-btn>
+      </div>
+    </v-app-bar>
+  </template>
+  
+  <script>
+  export default {
+    name: "NavigationBar"    
+  };
+  </script>
+  
+  <style scoped>
+  .menu {
+    color: white;
+    text-decoration: none;
+  }
+  </style>
+```
+
+src altına Views isimli bir klasör açalım.
+
+```bash
+cd src
+mkdir views
+cd views
+touch About.vue Home.vue
+mkdir dashboard
+cd dashboard
+touch SongList.vue DefaultContent.vue index.vue
+```
+
+ve bu view nesnelerini yazalım.
+
+SongList.vue
+
+```vue
+<template>
+    <v-container>
+      <div class="text-h4 mb-10">Beste Listesi</div>
+      <div class="v-picker--full-width d-flex justify-center" v-if="loading">
+        <v-progress-circular
+          :size="70"
+          :width="7"
+          color="purple"
+          indeterminate
+        ></v-progress-circular>
+      </div>
+  
+      <v-simple-table>
+        <template v-slot:default>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Language</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="b in songs" :key="b.id">
+              <td>{{ b.title }}</td>
+              <td>{{ getLang(b.language) }}</td>
+            </tr>
+          </tbody>
+        </template>
+      </v-simple-table>
+    </v-container>
+  </template>
+  
+  <script>
+  import { mapActions, mapGetters } from "vuex";
+  export default {
+    name: "songList",
+    async mounted() {
+      await this.getsongsAction();
+      this.songList = this.songs.map((pl) => pl);
+    },
+    data() {
+      return {
+        songList: [],
+        loading: false,
+      };
+    },
+    methods: {
+      ...mapActions("songModule", ["getsongsAction"]),
+      getLang(language) {
+        switch (language) {
+          case 0:
+            return "İngilizce";
+          case 1:
+            return "Türkçe";
+          case 2:
+            return "İspanyolca";
+          default:
+            return "Bilemedim";
+        }
+      },
+    },
+    computed: {
+      ...mapGetters("songModule", {
+        songs: "songs",
+      }),
+    },
+  };
+  </script>
+```
+
+DefaultContent.vue
+
+```vue
+<template>
+    <div>
+        <div class="text-h2 my-4">Besteler Panosu</div>
+        <div class="default-content">
+            <div style="margin-right: 4rem; margin-bottom: 4rem">
+                <SongListCard @handleShowBooks="handleShowSongs" />
+                <AddSongForm />
+            </div>
+        </div>
+        <div v-if="showSongs">
+            <AddSongForm :songId="songId" />
+        </div>
+    </div>
+</template>
+
+<script>
+    import { mapActions } from "vuex";
+    import SongListCard from "@/components/SongListCard";
+    import AddSongForm from "@/components/AddSongForm";
+    export default {
+        name: "DefaultContent",
+        components: {
+            SongListCard,
+            AddSongForm
+        },
+        methods: {
+            ...mapActions("songModule", ["getSongsAction"]),
+            handleShowSongs(show, id) {
+                this.showSongs = show;
+                this.songId = id;
+            },
+        },
+        data: () => ({
+            showSongs: false,
+            bookId: 0
+        }),
+        mounted() {
+            this.getSongssAction();
+            this.showSongs = false;
+        },
+    };
+</script>
+
+
+<style scoped>
+    .default-content {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+</style>
+```
+
+index.vue
+
+```vue
+<template>
+    <v-sheet
+      height="100vh"
+      class="overflow-hidden"
+      style="display: flex; flex-direction: row; justify-content: flex-start"
+    >
+      <v-navigation-drawer permanent expand-on-hover>
+        <v-list class="d-flex flex-column justify-center align-center">
+          <v-list-item class="px-2">
+            <v-list-item-avatar>
+              <v-img
+                src="https://randomuser.me/api/portraits/women/27.jpg"
+              ></v-img>
+            </v-list-item-avatar>
+          </v-list-item>
+        </v-list>
+
+        <v-divider></v-divider>
+  
+        <v-list nav dense>
+          <router-link to="/dashboard/" class="menu link">
+            <v-list-item link>
+              <v-list-item-icon>
+                <v-icon>mdi-view-dashboard-variant-outline</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title>Dashboard</v-list-item-title>
+            </v-list-item>
+          </router-link>
+          <router-link to="/dashboard/song-list" class="menu link">
+            <v-list-item link>
+              <v-list-item-icon>
+                <v-icon>mdi-format-list-bulleted</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title> Besteler Listesi </v-list-item-title>
+            </v-list-item>
+          </router-link>          
+        </v-list>
+      </v-navigation-drawer>
+      <v-container>
+        <router-view />
+      </v-container>
+    </v-sheet>
+  </template>
+  
+  <script>
+  
+  export default {
+    name: "dashboard",
+  };
+  </script>
+  
+  <style scoped>
+  .link {
+    text-decoration: none;
+  }
+  </style>
+```
+
+About.vue
+
+```vue
+<template>
+    <div class="about">
+      <h1>Bestelerim</h1>
+      <p>
+        Test amaçlı bir açıklama gelir.
+      </p>
+    </div>
+  </template>
+  ```
+
+Home.vue
+
+```vue
+<template>
+  <div class="home fill-height d-flex justify-center align-center">
+    <h1>Canım Şarkılarım :P</h1>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "Home",
+};
+</script>
+```
+
+src altına api klasörü açılır ve gerekli servisler bağlanır.
+
+song-service.js
+
+```js
+import api from "@/api/api-config";
+
+export async function getSongsAxios() {
+  return await api.get(`Songs/`);
+}
+```
+
+api-config.js
+
+```js
+import axios from "axios";
+const debug = process.env.NODE_ENV !== "production";
+
+/*
+    Üretim ortamında değilse localhost'tan üretim ortamındaysak gerçek adresinden bağlanacağımız bir axios nesnesi üretiliyor
+*/
+const baseURL = debug
+  ? "https://localhost:5001/api"
+  : "https://mylibrary.somewhere/api";
+
+let api = axios.create({ baseURL });
+
+export default api;
+```
+
+src altına router klasörü açılır ve index.js dosyası eklenir.
+
+index.js
+
+```js
+import Vue from "vue";
+import VueRouter from "vue-router";
+import Home from "@/views/Home.vue";
+import SongList from "@/views/dashboard/SongList";
+
+Vue.use(VueRouter);
+
+const routes = [
+  {
+    path: "/",
+    name: "Home",
+    component: Home,
+  },
+  {
+    path: "/about",
+    name: "About",
+    component: () =>
+      import(/* webpackChunkName: "about" */ "../views/About.vue"),
+    meta: {
+      requiresAuth: false, // Hakkında sayfası için authorization gerekli değil.
+    },
+  },
+  {
+    path: "/dashboard",
+    component: () => import("@/views/dashboard"),
+    meta: {
+      requiresAuth: false
+    },
+    children: [
+      {
+        path: "",
+        component: () => import("@/views/dashboard/DefaultContent"),
+      },
+      {
+        path: "song-list",
+        component: SongList,
+      }
+    ],
+  }    
+];
+
+const router = new VueRouter({
+  mode: "history",
+  base: process.env.BASE_URL,
+  routes,
+});
+
+export default router;
+```
+
+src klasörü altına store klasörü ve alt elemanları eklenir.
+
+```bash
+mkdir store
+cd store
+touch index.js
+mkdir song
+cd song
+touch action-types.js actions.js getters.js mutations.js services.js state.js index.js
+```
+
+action-types.js aşağıdaki gibi yazılır.
+
+```js
+export const LOADING_SONGS = "LOADING_SONGS";
+export const GET_SONGS = "GET_SONGS";
+export const REMOVE_SONG = "REMOVE_SONG";
+export const ADD_SONG = "ADD_SONG";
+```
+
+state.js
+
+```js
+const state = {
+    songs: [],
+    loading: false
+  };
+  
+  export default state;
+```
+
+mutations.js
+
+```js
+import * as actionTypes from "./action-types";
+
+const mutations = {
+    [actionTypes.GET_SONGS](state, books) {
+        state.songs = books;
+    },
+
+    [actionTypes.LOADING_SONGS](state, value) {
+        state.loading = value;
+    },
+
+    [actionTypes.REMOVE_SONG](state, id) {
+        state.songs = state.songs.filter((tl) => tl.id !== id);
+    },
+
+    [actionTypes.ADD_SONG](state, newSong) {
+        state.songs.unshift(newSong);
+    }
+};
+
+export default mutations;
+```
+
+getters.js
+
+```js
+const getters = {
+    songs: state => state.songs,
+    loading: state => state.loading
+};
+export default getters;
+```
+
+services.js
+
+```js
+import api from "@/api/api-config";
+
+/*
+   api-config üstünden api tarafında CRUD taleplerini gönderen fonksiyonları içerir
+*/
+export async function getSongs() {
+  return await api.get("songs");
+}
+
+export async function deleteSong(id) {
+  return await api.delete("songs/" + id);
+}
+
+export async function addSong(newSong) {
+    return await api.post("songs", newSong);
+}
+```
+
+actions.js
+
+```js
+import * as actionTypes from "./action-types";
+import { getSongs, deleteSong, addSong } from "@/store/song/services";
+
+export async function getSongsAction({ commit }) {
+    // Şarkıların yüklendiğine dair bir durum bildiriyor
+    commit(actionTypes.LOADING_SONGS, true);
+
+    try {
+        // servis fonksiyonundan veri çekiliyor
+        const { data } = await getSongs();
+        // şarkı listesinin alınması farklı bir durum ve payload olarak da listenin kendisi bildiriliyor
+        commit(actionTypes.GET_SONGS, data.songList);
+    } catch (e) {
+        console.log(e);
+    }
+    // Şarkıların yüklenme durumu sona erdiği için false ile bir durum bilgilendirilmesi yapılıyor
+    commit(actionTypes.LOADING_SONGS, false);
+}
+
+// Listeden şarkı çıkarmak için kullanılan fonksiyon
+export async function removeSongAction({ commit }, payload) {
+    commit(actionTypes.LOADING_SONGS, true);
+
+    try {
+        await deleteSong(payload);
+        commit(actionTypes.REMOVE_SONG, payload);
+    } catch (e) {
+        console.log(e);
+    }
+
+    commit(actionTypes.LOADING_SONGS, false);
+}
+
+// Yeni bir şarkı eklemek için kullanılan fonksiyon
+export async function addSongAction({ commit }, payload) {
+    var langs = {
+        English: 0,
+        Turkish: 1,
+        Spanish: 2
+    };
+    switch (payload.language.id) {
+        case 0:
+            payload.language = langs.English;
+            break;
+        case 1:
+            payload.language = langs.Turkish;
+            break;
+        case 2:
+            payload.language = langs.Spanish;
+            break;
+        default:
+            payload.language = langs.Turkish;
+    }
+    commit(actionTypes.LOADING_SONGS, true);
+
+    try {
+        const { data } = await addSong(payload);
+        payload.id = data;
+        commit(actionTypes.ADD_SONG, payload);
+    } catch (e) {
+        console.log(e);
+    }
+
+    commit(actionTypes.LOADING_SONGS, false);
+}
+```
+
+index.js
+
+```js
+import state from "./state";
+import getters from "./getters";
+import mutations from "./mutations";
+import * as actions from "./actions";
+
+export default {
+    namespaced: true,
+    getters,
+    mutations,
+    actions,
+    state
+};
+```
+
+ve pek tabii song altındaki bileşenleri dışarıya açan index dosyası _(store altındaki)_
+
+```js
+import Vue from "vue";
+import Vuex from "vuex";
+import createLogger from "vuex/dist/logger";
+import songModule from "./song";
+
+Vue.use(Vuex);
+
+const debug = process.env.NODE_ENV !== "production";
+const plugins = debug ? [createLogger({})] : [];
+
+export default new Vuex.Store({
+  modules: {
+    songModule,
+  },
+  plugins
+});
+```
+
+Bu işlemler ardından App.vue aşağıdaki gibi düzenlenebilir.
+
+```vue
+<template>
+  <v-app>
+    <NavigationBar /> 
+    <v-main>
+      <router-view />
+    </v-main>
+  </v-app>
+</template>
+
+<script>
+import NavigationBar from "@/components/NavigationBar";
+export default {
+  name: "App",
+  components: {
+    NavigationBar,
+  },
+};
+</script>
+```
+
+main.js içeriği de şöyle düzenlenebilir.
+
+```js
+import Vue from "vue";
+import App from "./App.vue";
+import router from "./router";
+import store from "./store";
+import vuetify from "./plugins/vuetify";
+import "./plugins/vuelidate"; // Doğrulama paketini projede kullanabilmek için eklendi
+
+Vue.config.productionTip = false;
+
+new Vue({
+  router,
+  store,
+  vuetify,
+  render: (h) => h(App),
+}).$mount("#app");
+```
+

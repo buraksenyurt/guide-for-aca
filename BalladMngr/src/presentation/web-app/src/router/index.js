@@ -1,6 +1,6 @@
 import Vue from "vue";
 import VueRouter from "vue-router";
-import Home from "@/views/Home.vue";
+import Home from "@/views/HomeView.vue";
 import SongList from "@/views/dashboard/SongList";
 
 Vue.use(VueRouter);
@@ -15,7 +15,7 @@ const routes = [
     path: "/about",
     name: "About",
     component: () =>
-      import(/* webpackChunkName: "about" */ "../views/About.vue"),
+      import(/* webpackChunkName: "about" */ "../views/AboutView.vue"),
     meta: {
       requiresAuth: false, // Hakkında sayfası için authorization gerekli değil.
     },

@@ -1,4 +1,4 @@
-# ballad-mngr-app
+# web-app
 
 ## Project setup
 ```

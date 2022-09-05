@@ -1,8 +1,8 @@
 import * as actionTypes from "./action-types";
 
 const mutations = {
-    [actionTypes.GET_SONGS](state, books) {
-        state.songs = books;
+    [actionTypes.GET_SONGS](state, songs) {
+        state.songs = songs;
     },
 
     [actionTypes.LOADING_SONGS](state, value) {

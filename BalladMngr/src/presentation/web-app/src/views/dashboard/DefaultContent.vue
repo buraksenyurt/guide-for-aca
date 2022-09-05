@@ -35,7 +35,7 @@
             bookId: 0
         }),
         mounted() {
-            this.getSongssAction();
+            this.getSongsAction();
             this.showSongs = false;
         },
     };

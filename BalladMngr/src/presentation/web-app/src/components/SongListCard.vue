@@ -34,7 +34,7 @@
         name: "SongListCard",
         computed: {
             ...mapGetters("songModule", {
-                books: "songs",
+                songs: "songs",
                 loading: "loading",
             }),
         },

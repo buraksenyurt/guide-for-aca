@@ -4,7 +4,6 @@ using BalladMngr.Application.Common.Interfaces;
 using BalladMngr.Application.Dtos.Songs;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,7 +26,7 @@ namespace BalladMngr.Application.Songs.Queries.GetSongs
     {
         private readonly IApplicationDbContext _context;
         private readonly IMapper _mapper;
-        public GetSongsQueryHandler(IApplicationDbContext context, IMapper mapper, IDistributedCache distributedCache)
+        public GetSongsQueryHandler(IApplicationDbContext context, IMapper mapper)
         {
             _context = context;
             _mapper = mapper;

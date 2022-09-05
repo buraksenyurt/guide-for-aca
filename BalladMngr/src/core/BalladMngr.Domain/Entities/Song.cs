@@ -3,7 +3,7 @@ using BalladMngr.Domain.Enums;
 namespace BalladMngr.Domain.Entities
 {
      // Beste ile ilgili temel bilgileri içerir.
-    public class Book
+    public class Song
     {
         public int Id { get; set; }
         public string Title { get; set; }

@@ -12,5 +12,5 @@ export async function deleteSong(id) {
 }
 
 export async function addSong(newSong) {
-    return await api.post("songs", newSong);
+  return await api.post("songs", newSong);
 }

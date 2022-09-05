@@ -24,7 +24,7 @@ const routes = [
     path: "/dashboard",
     component: () => import("@/views/dashboard"),
     meta: {
-      requiresAuth: false
+      requiresAuth: false,
     },
     children: [
       {
@@ -34,9 +34,9 @@ const routes = [
       {
         path: "song-list",
         component: SongList,
-      }
+      },
     ],
-  }    
+  },
 ];
 
 const router = new VueRouter({

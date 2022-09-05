@@ -27,8 +27,8 @@ cd src
 mkdir core infrastructure presentation
 
 cd core
-dotnet new classlib -f netstandard2.1 --name BalladMngr.Domain
-dotnet new classlib -f netstandard2.1 --name BalladMngr.Application
+dotnet new classlib -f net6.0 --name BalladMngr.Domain
+dotnet new classlib -f net6.0 --name BalladMngr.Application
 
 cd BalladMngr.Application
 dotnet add reference ../BalladMngr.Domain/BalladMngr.Domain.csproj
@@ -221,6 +221,9 @@ dotnet add package MediatR.Extensions.Microsoft.DependencyInjection
 dotnet add package Microsoft.Extensions.Logging.Abstractions
 dotnet add package AutoMapper
 dotnet add package AutoMapper.Extensions.Microsoft.DependencyInjection
+dotnet add package FluentValidation
+dotnet add package FluentValidation.DependencyInjectionExtensions
+dotnet add package Microsoft.EntityFrameworkCore
 
 mkdir Common
 cd Common
@@ -241,5 +244,225 @@ cd ..
 
 mkdir Queries
 cd Queries
-mkdir ExportBooks GetBooks
+mkdir ExportSongs GetSongs
 ```
+
+İlk olarak Mappings klasörüne IMapFrom.cs arayüzü eklenir.
+
+```csharp
+using AutoMapper;
+
+namespace BalladMngr.Application.Common.Mappings
+{
+    public interface IMapFrom<T>
+    {
+        void Mapping(Profile profile) => profile.CreateMap(typeof(T), GetType());
+    }
+}
+```
+
+Aynı klasöre MappingProfile.cs eklenir.
+
+```csharp
+using AutoMapper;
+using System;
+using System.Linq;
+using System.Reflection;
+
+namespace BalladMngr.Application.Common.Mappings
+{
+    public class MappingProfile : Profile
+    {
+        public MappingProfile()
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+
+            var types = assembly.GetExportedTypes()
+              .Where(
+                        t => t.GetInterfaces()
+                        .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IMapFrom<>))
+                    )
+              .ToList();
+
+            foreach (var type in types)
+            {
+                var instance = Activator.CreateInstance(type);
+                var methodInfo = type.GetMethod("Mapping") ?? type.GetInterface("IMapFrom`1").GetMethod("Mapping");
+                methodInfo?.Invoke(instance, new object[] { this });
+            }
+        }
+    }
+}
+```
+
+Şimdi CQRS tarafını tamamlayalım.
+
+ExportSongs klasörüne SongRecord.cs eklenir.
+
+```csharp
+using BalladMngr.Application.Common.Mappings;
+using BalladMngr.Domain.Entities;
+using BalladMngr.Domain.Enums;
+
+namespace BalladMngr.Application.Songs.Queries.ExportSongs
+{
+    /*
+     * CSV içerisine hangi şarkı bilgilerini tutacağımızı belirten veri yapısı.
+     * 
+     * Bir nesne dönüşümü söz konusu olduğundan IMapFrom<T> uyarlaması var.
+     * 
+     */
+    public class SongRecord
+        :IMapFrom<Song>
+    {
+        public string Title { get; set; }
+        public Status Status { get; set; }
+    }
+}
+```
+
+Ardından Interfaces klasörüne IApplicationDbContext vs ICsvBuilder.cs sınıfları eklenir.
+
+IApplicationDbContext.cs
+
+```csharp
+using BalladMngr.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Librarian.Application.Common.Interfaces
+{
+    /*
+     * Entity Framework Core context nesnesine ait servis sözleşmemiz.
+     * Onu da DI mekanizmasına kolayca dahil edip bağımlılığı çözümletebiliriz.
+     * Yani infrastructe katmanındaki Data kütüphanesindeki BalladMngrDbContext'i bu arayüz üstünden sisteme entegre edebileceğiz.
+     */
+    public interface IApplicationDbContext
+    {
+        public DbSet<Song> Songs { get; set; }
+        Task<int> SaveChangesAsync(CancellationToken cancellationToken);
+    }
+}
+```
+
+ICsvBuilder.cs
+
+```csharp
+using BalladMngr.Application.Songs.Queries.ExportSongs;
+using System.Collections.Generic;
+
+namespace BalladMngr.Application.Common.Interfaces
+{
+    /*
+     * CSV dosya çıktısı üreten servisin sözleşmesi
+     * IEmailService tarafında olduğu gibi bu hizmeti de DI mekanizmasına kolayca dahil edebileceğiz.
+     */
+    public interface ICsvBuilder
+    {
+        byte[] BuildFile(IEnumerable<SongRecord> songRecords);
+    }
+}
+```
+
+Aynı yere ExportSongsQuery.cs ve ExportSongsViewModel.cs dosyaları eklenir.
+
+ExportSongsViewModel.cs
+
+```csharp
+namespace BalladMngr.Application.Songs.Queries.ExportSongs
+{
+    /*
+     * Şarkıların bir çıktısını CSV olarak verdiğimizde kullanılan ViewModel nesnemiz.
+     * Bunu ExportSongsQuery ve Handler tipi kullanmakta.
+     * Dosyanın adını, içeriğin tipini ve byte[] cinsinden içeriği tutuyor.
+     * Belki byte[] yerine 64 bit encode edilmiş string içerik de verebiliriz. 
+     */
+    public class ExportSongsViewModel
+    {
+        public string FileName { get; set; }
+        public byte[] Content { get; set; }
+        public string ContentType { get; set; }
+    }
+}
+```
+
+ExportSongsQuery.cs
+
+```csharp
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using Librarian.Application.Common.Interfaces;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using System.Threading;
+using System.Threading.Tasks;
+using BalladMngr.Application.Common.Interfaces;
+
+namespace BalladMngr.Application.Songs.Queries.ExportSongs
+{
+    /*
+     * 
+     * Query nesnemiz.
+     * Talebe karşılık bir ViewModel döndürüleceğini tanımlıyor.
+     * 
+     */
+    public class ExportSongsQuery
+        : IRequest<ExportSongsViewModel>
+    {
+    }
+
+    /*
+    * Handler tipimiz.
+    * Gelen sorguya ele alıp uygun ViewModel nesnesinin döndürülmesi sağlanıyor.
+    * 
+    * Kullanması için gereken bağımlılıkları Constructor Injection ile içeriye alıyoruz.
+    * Buna göre CSV üretici, AutoMapper nesne dönüştürücü ve EF Core DbContext servislerini içeriye alıyoruz.
+    * 
+    * Şarkı listesini çektiğimiz LINQ sorgusunda ProjectTo metodunu nasıl kullandığımız dikkat edelim.
+    * Listenin SongRecord tipinden nesnelere dönüştürülmesi noktasında AutoMapper'ın çalışma zamanı sorumlusu kimse o kullanılıyor olacak.
+    * Nitekim SongRecord tipinin IMapFrom<Song> tipini uyguladığını düşünecek olursak çalışma zamanı Song üstünden gelen özelliklerden eş düşenleri, SongRecord karşılıklarına alacak.
+    */
+    public class ExportSongsQueryHandler : IRequestHandler<ExportSongsQuery, ExportSongsViewModel>
+    {
+        private readonly IApplicationDbContext _context;
+        private readonly IMapper _mapper;
+        private readonly ICsvBuilder _csvBuilder;
+        public ExportSongsQueryHandler(IApplicationDbContext context, IMapper mapper, ICsvBuilder csvBuilder)
+        {
+            _context = context;
+            _mapper = mapper;
+            _csvBuilder = csvBuilder;
+        }
+        public async Task<ExportSongsViewModel> Handle(ExportSongsQuery request, CancellationToken cancellationToken)
+        {
+            var viewModel = new ExportSongsViewModel();
+
+            var list = await _context.Songs
+                .ProjectTo<SongRecord>(_mapper.ConfigurationProvider)
+                .ToListAsync(cancellationToken);
+
+            viewModel.FileName = "Songs.csv";
+            viewModel.ContentType = "text/csv";
+            viewModel.Content = _csvBuilder.BuildFile(list);
+
+            return await Task.FromResult(viewModel);
+        }
+    }
+}
+```
+
+Interfaces klasörüne aşağıdaki arayüzler eklenir
+
+IEmailService.cs
+
+```csharp
+
+```
+
+IUserService.cs
+
+```csharp
+
+```
+

@@ -106,7 +106,7 @@ export default {
     ],
   }),
   methods: {
-    ...mapActions("SongModule", ["addSongAction"]),
+    ...mapActions("songModule", ["addSongAction"]),
   },
   computed: {
     titleErrors() {

@@ -1,0 +1,64 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30114.105
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{7E1CA186-0B0B-45B7-89B0-613ABC35F50C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "core", "core", "{CFC8175E-82EC-41AB-85A4-D29DBBD92646}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BalladMngr.Domain", "src\core\BalladMngr.Domain\BalladMngr.Domain.csproj", "{D8A947F9-6C8B-49B9-83D2-E8C4F7BD621F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BalladMngr.Application", "src\core\BalladMngr.Application\BalladMngr.Application.csproj", "{57B00DB3-919D-4A0A-932F-6BBC67751944}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infrastructure", "infrastructure", "{3D450F0F-6444-42D5-B255-10F3F34559ED}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BalladMngr.Data", "src\infrastructure\BalladMngr.Data\BalladMngr.Data.csproj", "{7FE89666-A52E-48BA-97CD-2A62BC8F4225}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BalladMngr.Shared", "src\infrastructure\BalladMngr.Shared\BalladMngr.Shared.csproj", "{4578C88E-E292-4F74-967F-C3D3D62DA318}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "presentation", "presentation", "{7390A61F-5A64-4CA1-9140-5A59DD604856}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BalladMngr.WebApi", "src\presentation\BalladMngr.WebApi\BalladMngr.WebApi.csproj", "{EDF1FBF7-FEB3-4342-8C9B-A556BB066DBC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D8A947F9-6C8B-49B9-83D2-E8C4F7BD621F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D8A947F9-6C8B-49B9-83D2-E8C4F7BD621F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D8A947F9-6C8B-49B9-83D2-E8C4F7BD621F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D8A947F9-6C8B-49B9-83D2-E8C4F7BD621F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{57B00DB3-919D-4A0A-932F-6BBC67751944}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57B00DB3-919D-4A0A-932F-6BBC67751944}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{57B00DB3-919D-4A0A-932F-6BBC67751944}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{57B00DB3-919D-4A0A-932F-6BBC67751944}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7FE89666-A52E-48BA-97CD-2A62BC8F4225}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7FE89666-A52E-48BA-97CD-2A62BC8F4225}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7FE89666-A52E-48BA-97CD-2A62BC8F4225}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7FE89666-A52E-48BA-97CD-2A62BC8F4225}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4578C88E-E292-4F74-967F-C3D3D62DA318}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4578C88E-E292-4F74-967F-C3D3D62DA318}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4578C88E-E292-4F74-967F-C3D3D62DA318}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4578C88E-E292-4F74-967F-C3D3D62DA318}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EDF1FBF7-FEB3-4342-8C9B-A556BB066DBC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EDF1FBF7-FEB3-4342-8C9B-A556BB066DBC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EDF1FBF7-FEB3-4342-8C9B-A556BB066DBC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EDF1FBF7-FEB3-4342-8C9B-A556BB066DBC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{CFC8175E-82EC-41AB-85A4-D29DBBD92646} = {7E1CA186-0B0B-45B7-89B0-613ABC35F50C}
+		{D8A947F9-6C8B-49B9-83D2-E8C4F7BD621F} = {CFC8175E-82EC-41AB-85A4-D29DBBD92646}
+		{57B00DB3-919D-4A0A-932F-6BBC67751944} = {CFC8175E-82EC-41AB-85A4-D29DBBD92646}
+		{3D450F0F-6444-42D5-B255-10F3F34559ED} = {7E1CA186-0B0B-45B7-89B0-613ABC35F50C}
+		{7FE89666-A52E-48BA-97CD-2A62BC8F4225} = {3D450F0F-6444-42D5-B255-10F3F34559ED}
+		{4578C88E-E292-4F74-967F-C3D3D62DA318} = {3D450F0F-6444-42D5-B255-10F3F34559ED}
+		{7390A61F-5A64-4CA1-9140-5A59DD604856} = {7E1CA186-0B0B-45B7-89B0-613ABC35F50C}
+		{EDF1FBF7-FEB3-4342-8C9B-A556BB066DBC} = {7390A61F-5A64-4CA1-9140-5A59DD604856}
+	EndGlobalSection
+EndGlobal

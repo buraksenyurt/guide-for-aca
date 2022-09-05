@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Librarian.Application.Common.Interfaces
+namespace BalladMngr.Application.Common.Interfaces
 {
     /*
      * Entity Framework Core context nesnesine ait servis sözleşmemiz.

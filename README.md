@@ -222,7 +222,7 @@ namespace BalladMngr.Domain.Settings
 }
 ```
 
-## 02 - MediatoR Paketinin Eklenmesi ve CQRS Hazırlıkları
+## 02 - MediatR Paketinin Eklenmesi ve CQRS Hazırlıkları
 
 ```shell
 cd core

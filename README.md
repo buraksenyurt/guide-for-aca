@@ -247,7 +247,250 @@ cd Queries
 mkdir ExportSongs GetSongs
 ```
 
-İlk olarak Mappings klasörüne IMapFrom.cs arayüzü eklenir.
+Serüven boyunca ihtiyacımız olacak bazı temel türleri ekleyelim. 
+
+Olası özel exception tipleri...
+
+SongNotFoundException.cs
+
+```csharp
+using System;
+
+namespace BalladMngr.Application.Common.Exceptions
+{
+    public class SongNotFoundException
+        : Exception
+    {
+        public SongNotFoundException(int songId)
+          : base($"{songId} nolu kitap envanterde bulunamadı") { }
+    }
+}
+```
+
+SendEmailException.cs
+
+```csharp
+using System;
+
+namespace BalladMngr.Application.Common.Exceptions
+{
+    public class SendEmailException
+        : Exception
+    {
+        public SendEmailException(string message)
+            : base(message)
+        {
+        }
+    }
+}
+```
+
+ValidationException.cs
+
+```csharp
+using FluentValidation.Results;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace BalladMngr.Application.Common.Exceptions
+{
+    /*
+     * 
+     * ValidationBehavior tipi tarafından kullanılan Exception türevidir.
+     * 
+     */
+    public class ValidationException
+        :Exception
+    {
+        public IDictionary<string, string[]> Errors { get; }
+        public ValidationException()
+        {
+            Errors = new Dictionary<string, string[]>();
+        }
+        public ValidationException(IEnumerable<ValidationFailure> errors)
+            :this()
+        {
+            var errorGroups= errors
+                .GroupBy(e => e.PropertyName, e => e.ErrorMessage);
+
+            foreach (var e in errorGroups)
+            {
+                Errors.Add(e.Key, e.ToArray());
+            }
+        }
+
+    }
+}
+```
+
+Yine serüven boyunca özel olarak MediatR tarafına entegre edeceğimiz bazı davranışlar var. Loglama, hata yakalama gibi. Bunları da Behaviors klasörüne sırasıyla ekleyelim.
+
+ValidationBehavior.cs
+
+```csharp
+using FluentValidation;
+using MediatR;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace BalladMngr.Application.Common.Behaviors
+{
+    /*
+     * Bir Command çalışıp ekleme, güncelleme gibi işlemler yapıldığı sırada devreye giren doğrulama fonksiyonunu sağlıyoruz.
+     * 
+     * Eğer talebin geldiği komuta bir Validator uygulanmışsa buradaki süreç çalışıp doğrulama ihlalleri toplanacak.
+     * Eğer ihlaller varsa bunu da ValidationException isimli bizim yazdığımı bir nesnede toplayıp sisteme exception basacağız.
+     * Doğal olarak talep işlenmeyecek.
+     */
+    public class ValidationBehavior<TRequest, TResponse>
+        : IPipelineBehavior<TRequest, TResponse>
+        where TRequest : IRequest<TResponse>
+    {
+        private readonly IEnumerable<IValidator<TRequest>> _validators;
+        public ValidationBehavior(IEnumerable<IValidator<TRequest>> validators)
+        {
+            _validators = validators;
+        }
+
+        public async Task<TResponse> Handle(TRequest request, CancellationToken cancellationToken, RequestHandlerDelegate<TResponse> next)
+        {
+            if (!_validators.Any())
+                return await next();
+
+            var context = new ValidationContext<TRequest>(request);
+            var validationResults = await Task.WhenAll(_validators.Select(v => v.ValidateAsync(context, cancellationToken)));
+            var errors = validationResults.SelectMany(r => r.Errors).Where(f => f != null).ToList();
+
+            if (errors.Count != 0)
+                throw new ValidationException(errors);
+
+            return await next();
+        }
+    }
+}
+```
+
+LoggingBehavior.cs
+
+```csharp
+using MediatR.Pipeline;
+using Microsoft.Extensions.Logging;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace BalladMngr.Application.Common.Behaviors
+{
+    /*
+     * MediatR işleyişinde mesajlar arasına girmek mümkün.
+     * Burada mesaj işlenmeden önce araya girip basitçe log atmaktayız.
+     */
+    public class LoggingBehavior<TRequest>
+        : IRequestPreProcessor<TRequest>
+    {
+        private readonly ILogger<TRequest> _logger;
+        public LoggingBehavior(ILogger<TRequest> logger)
+        {
+            _logger = logger;
+        }
+        public async Task Process(TRequest request, CancellationToken cancellationToken)
+        {
+            var requestName = typeof(TRequest).Name;
+            _logger.LogInformation($"Talep geldi {request}", requestName);
+        }
+    }
+}
+```
+
+PerformanceBehvaior.cs
+
+```csharp
+using MediatR;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace BalladMngr.Application.Common.Behaviors
+{
+    /*
+     * Taleplerin ne kadar sürede işlendiğini tespit etmek ve belli bir değerin altına indiğinde uyarı logu basmak için bu uyarlama oldukça kullanışlı.
+     * LoggingBehavior'un uyguladığı arayüzden farklı bir arayüz uygulandığına dikkat etmek lazım.
+     * Handle metodunda mesajı hat üzerindeki bir sonraki noktaya taşıdığımız next fonksiyonunun önüne ve sonrasına zamanlayıcı çağrıları koyduk.
+     * Sonrasında cevaplama süresinin 250 milisaniye altında olup olmadığına bakıp uyarı logu basıyoruz.
+     */
+    public class PerformanceBehavior<TRequest, TResponse>
+        : IPipelineBehavior<TRequest, TResponse>
+        where TRequest : MediatR.IRequest<TResponse>
+    {
+        private readonly ILogger<TRequest> _logger;
+        private readonly Stopwatch _hgwells;
+        public PerformanceBehavior(ILogger<TRequest> logger)
+        {
+            _logger = logger;
+            _hgwells = new Stopwatch();
+        }
+        public async Task<TResponse> Handle(TRequest request, CancellationToken cancellationToken, RequestHandlerDelegate<TResponse> next)
+        {
+            _hgwells.Start();
+            var response = await next();
+            _hgwells.Stop();
+
+            var responseDuration = _hgwells.ElapsedMilliseconds;
+            if (responseDuration < 250)
+                return response;
+
+            _logger.LogWarning($"{typeof(TRequest).Name} normal çalışma süresini aştı. {responseDuration}. İçerik {request}");
+            return response;
+
+        }
+    }
+}
+```
+
+son olarak UnhandledExceptionBehavior.cs
+
+```csharp
+using MediatR;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace BalladMngr.Application.Common.Behaviors
+{
+    /*
+     * Pipeline arayüzünden türeyen bu behavior tipi ile Query ve Command'lerin işleyişi sırasında oluşan exception durumlarını loglamaktayız.
+     * Yakalanan Exception akışta ele alınmamış bir exception ise burada yakalamamız kolay olacaktır.
+     */
+    public class UnhandledExceptionBehavior<TRequest, TResponse>
+        : IPipelineBehavior<TRequest, TResponse>
+        where TRequest : MediatR.IRequest<TResponse>
+    {
+        private readonly ILogger<TRequest> _logger;
+        public UnhandledExceptionBehavior(ILogger<TRequest> logger)
+        {
+            _logger = logger;
+        }
+        public async Task<TResponse> Handle(TRequest request, CancellationToken cancellationToken, RequestHandlerDelegate<TResponse> next)
+        {
+            try
+            {
+                return await next();
+            }
+            catch (Exception excp)
+            {
+                _logger.LogError(excp, "Talep geldi ama bir exception oluştu");
+                throw;
+            }
+        }
+    }
+}
+```
+
+Şimdi Mappings klasörüne IMapFrom.cs arayüzü eklenir.
 
 ```csharp
 using AutoMapper;
@@ -331,7 +574,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Librarian.Application.Common.Interfaces
+namespace BalladMngr.Application.Common.Interfaces
 {
     /*
      * Entity Framework Core context nesnesine ait servis sözleşmemiz.
@@ -392,12 +635,11 @@ ExportSongsQuery.cs
 ```csharp
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
-using Librarian.Application.Common.Interfaces;
+using BalladMngr.Application.Common.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System.Threading;
 using System.Threading.Tasks;
-using BalladMngr.Application.Common.Interfaces;
 
 namespace BalladMngr.Application.Songs.Queries.ExportSongs
 {
@@ -452,17 +694,357 @@ namespace BalladMngr.Application.Songs.Queries.ExportSongs
 }
 ```
 
-Interfaces klasörüne aşağıdaki arayüzler eklenir
+Email gönderim servisi ve authentication tarafı için Dtos altına gerekli Dto veri yapılarını da ekleyelim.
+
+EmailDto.cs
+
+```csharp
+namespace BalladMngr.Application.Dtos.Email
+{
+    public class EmailDto
+    {
+        public string From { get; set; }
+        public string To { get; set; }
+        public string Subject { get; set; }
+        public string Body { get; set; }
+    }
+}
+```
+
+AuthenticationRequest.cs
+
+```csharp
+using System.ComponentModel.DataAnnotations;
+
+namespace BalladMngr.Application.Dtos.User
+{
+    /*
+     * Authentication aşamasında gelen talebin içinde Username ve Password bilgisinin taşınmasını sağlayan sınıfımız
+     */
+    public class AuthenticationRequest
+    {
+        [Required]
+        public string Username { get; set; }
+
+        [Required]
+        public string Password { get; set; }
+    }
+}
+```
+
+AuthenticationResponse.cs
+
+```csharp
+namespace BalladMngr.Application.Dtos.User
+{
+    /*
+     * Doğrulama başarılı olduğunda dönen response içeriğini temsil eden sınıf.
+     * 
+     * Aslında Claim sete ait bilgileri taşıdığını ifade edebiliriz.
+     * Önemli detaylardan birisi Password alanının olmayışı ama üretilecek JWT token için Token isimli bir özellik kullanılmasıdır.
+     */
+    public class AuthenticationResponse
+    {
+        public int UserId { get; set; }
+        public string Name { get; set; }
+        public string LastName { get; set; }
+        public string Username { get; set; }
+        public string Email { get; set; }
+        public string Token { get; set; }
+        public AuthenticationResponse(Domain.Entities.User user, string token)
+        {
+            UserId = user.UserId;
+            Name = user.Name;
+            LastName = user.LastName;
+            Username = user.Username;
+            Email = user.Email;
+            Token = token;
+        }
+    }
+}
+```
+
+Email gönderim servisi ve doğrulama hizmeti için gerekli Dto nesneleri hazır. Artık dışarıya açılacak sözleşmeleri tanımlayabiliriz.
 
 IEmailService.cs
 
 ```csharp
+using BalladMngr.Application.Dtos.Email;
+using System.Threading.Tasks;
 
+namespace BalladMngr.Application.Common.Interfaces
+{
+    /*
+     * Email gönderim işlemini tanımlayan servis sözleşmesi.
+     * 
+     * Sistemde buna benzer işlevsel fonksiyonlar içeren servisleri birer arayüz ile tanımlıyoruz.
+     * Böylece bağımlılıkları kolayca çözümletebiliriz. Dependency Injection uygulamak kolay olacaktır.
+     * Bu servisler Application katmanında toplanıyorlar. 
+     * Interfaces isimli bir klasör içerisinde konuşlandırmak oldukça mantıklı.
+     * 
+     */
+    public interface IEmailService
+    {
+        Task SendAsync(EmailDto mailDto);
+    }
+}
 ```
 
 IUserService.cs
 
 ```csharp
+using BalladMngr.Application.Dtos.User;
+using BalladMngr.Domain.Entities;
 
+namespace BalladMngr.Application.Common.Interfaces
+{
+    /*
+     * Kullanıcı servisi response içeriği ile gelen bilgilere göre doğrulama işini üstlenen
+     * ve id üstünden kullanıcı bilgisi döndüren fonksiyonları tarifleyen bir sözleşme sunuyor.
+     */
+    public interface IUserService
+    {
+        AuthenticationResponse Authenticate(AuthenticationRequest model);
+        User GetById(int userId);
+    }
+}
+```
+
+Tekrar CQRS tarafına dönelim ve Create, Update, Delete için gerekli komut sınıflarını oluşturalım.
+
+CreateSongCommand.cs
+
+```csharp
+using BalladMngr.Application.Common.Interfaces;
+using BalladMngr.Domain.Entities;
+using BalladMngr.Domain.Enums;
+using MediatR;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace BalladMngr.Application.Songs.Commands.CreateSong
+{
+    /*
+     * Şarkı listesine yeni bir beste ekleme işini üstlenen MediatR tipleri.
+     * Komut şarkı için gerekli parametreleri alırken geriye insert sonrası oluşan bir int değer(kuvvetle muhtemel primary key id değeri) dönüyor.
+     * Handler sınıfı IApplicationDbContext üstünden gelen Entity Context nesnesini kullanarak besteyi repository'ye ekliyor.
+     * 
+     */
+    public class CreateSongCommand
+        : IRequest<int>
+    {
+        public string Title { get; set; }
+        public Language Language{ get; set; }
+        public string Lyrics { get; set; }
+    }
+
+    public class CreateSongCommandHandler
+        : IRequestHandler<CreateSongCommand, int>
+    {
+        private readonly IApplicationDbContext _context;
+        public CreateSongCommandHandler(IApplicationDbContext context)
+        {
+            _context = context;
+        }
+        public async Task<int> Handle(CreateSongCommand request, CancellationToken cancellationToken)
+        {
+            var s = new Song
+            {
+                Title = request.Title,
+                Lyrics=request.Lyrics,
+                Language=request.Language,
+                Status=Status.Draft
+            };
+            _context.Songs.Add(s);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return s.Id;
+        }
+    }
+}
+```
+
+Bir şarkı eklenirken doğrulama işlemlerini de işletebiliriz. Bunun için,
+
+CreateSongCommandValidator.cs
+
+```csharp
+using FluentValidation;
+using BalladMngr.Application.Common.Interfaces;
+
+namespace BalladMngr.Application.Songs.Commands.CreateSong
+{
+    /*
+     * Şarkı bilgilerinin güncellendiği Command nesnesi için hazırlanmış doğrulama tipi. 
+     * Esasında CreateSongCommandValidator ile neredeyse aynı.
+     */
+    public class CreateSongCommandValidator : AbstractValidator<CreateSongCommand>
+    {
+        private readonly IApplicationDbContext _context;
+
+        public CreateSongCommandValidator(IApplicationDbContext context)
+        {
+            _context = context;
+
+            RuleFor(v => v.Title)
+              .NotEmpty().WithMessage("Şarkının başlığı olmalı!")
+              .MaximumLength(100).WithMessage("Bu şarkının adı çok uzun!");
+
+            RuleFor(v => v.Lyrics)
+              .NotEmpty().WithMessage("Birkaç mısra da olsa sözler olmalı!")
+              .MinimumLength(50).WithMessage("Bence en az 50 karakterden oluşan bir metin olmalı!")
+              .MaximumLength(1000).WithMessage("Ne çok söz varmış. Şarkıyı kısaltalım.");
+        }
+    }
+}
+```
+
+DeleteSongCommand.cs
+
+```csharp
+using BalladMngr.Application.Common.Exceptions;
+using BalladMngr.Application.Common.Interfaces;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace BalladMngr.Application.Songs.Commands.DeleteSong
+{
+    /*
+     * beste silme işini ele aldığımı Command ve Handler tipleri.
+     * 
+     * Bir besteyi silmek için talebin içinde Id bilgisinin olması yeterli. Command buna göre düzenlendi.
+     * Silme operasyonunu ele alan Handler tipimiz yine ilgili kitabı envanterde arıyor.
+     * Eğer bulamazsa SongNotFoundException fırlatılıyor.
+     * 
+     */
+    public class DeleteSongCommand
+        : IRequest
+    {
+        public int SongId { get; set; }
+    }
+
+    public class DeleteSongCommandHandler
+        : IRequestHandler<DeleteSongCommand>
+    {
+        private readonly IApplicationDbContext _context;
+        public DeleteSongCommandHandler(IApplicationDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<Unit> Handle(DeleteSongCommand request, CancellationToken cancellationToken)
+        {
+            var b = await _context.Songs
+              .Where(l => l.Id == request.SongId)
+              .SingleOrDefaultAsync(cancellationToken);
+
+            if (b == null)
+            {
+                throw new SongNotFoundException(request.SongId);
+            }
+
+            _context.Songs.Remove(b);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
+        }
+    }
+}
+```
+
+ve güncelleme komutu için UpdateSongCommand.cs
+
+```csharp
+using BalladMngr.Application.Common.Exceptions;
+using BalladMngr.Application.Common.Interfaces;
+using BalladMngr.Domain.Enums;
+using MediatR;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace BalladMngr.Application.Songs.Commands.UpdateSong
+{
+    /*
+     * Bir şarkının bilgilerini güncellemek isteyebilirim. Adı, içeriği, durumu vesaire.
+     * Topluca bunların güncellemesini ele alan Command'ın beklediği özellikler aşağıdaki gibidir.
+     * 
+     * Handler sınıfı da bu Command'i kullanarak repository üzerinde gerekli güncellemeleri yapar. 
+     * Id ile gelen kitap bilgisi bulunamazsa ortama SongNotFoundException isimli bizim yazdığımız bir istisna tipi fırlatılır.
+     * 
+     */
+    public partial class UpdateSongCommand : IRequest
+    {
+        public int SongId { get; set; }
+        public string Title { get; set; }
+        public string Lyrics { get; set; }
+        public Language Language { get; set; }
+        public Status Status { get; set; }
+    }
+
+    public class UpdateSongCommandHandler : IRequestHandler<UpdateSongCommand>
+    {
+        private readonly IApplicationDbContext _context;
+
+        public UpdateSongCommandHandler(IApplicationDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<Unit> Handle(UpdateSongCommand request, CancellationToken cancellationToken)
+        {
+            var s = await _context.Songs.FindAsync(request.SongId);
+            if (s == null)
+            {
+                throw new SongNotFoundException(request.SongId);
+            }
+            s.Title = request.Title;
+            s.Lyrics = request.Lyrics;
+            s.Language = request.Language;
+            s.Status = request.Status;
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return Unit.Value;
+        }
+    }
+}
+```
+
+Güncelleme işlemi sırasında da doğrulama operasyonu işletebiliriz. Bunun için
+
+UpdateSongCommandValidator.cs
+
+```csharp
+using FluentValidation;
+using BalladMngr.Application.Common.Interfaces;
+
+namespace BalladMngr.Application.Songs.Commands.UpdateSong
+{
+    /*
+     * Şarkı bilgilerinin güncellendiği Command nesnesi için hazırlanmış doğrulama tipi. 
+     * Esasında CreateSongCommandValidator ile neredeyse aynı.
+     */
+    public class UpdateSongCommandValidator : AbstractValidator<UpdateSongCommand>
+    {
+        private readonly IApplicationDbContext _context;
+
+        public UpdateSongCommandValidator(IApplicationDbContext context)
+        {
+            _context = context;
+
+            RuleFor(v => v.Title)
+              .NotEmpty().WithMessage("Şarkının başlığı olmalı!")
+              .MaximumLength(100).WithMessage("Bu şarkının adı çok uzun!");
+
+            RuleFor(v => v.Lyrics)
+              .NotEmpty().WithMessage("Birkaç mısra da olsa sözler olmalı!")
+              .MinimumLength(50).WithMessage("Bence en az 50 karakterden oluşan bir metin olmalı!")
+              .MaximumLength(1000).WithMessage("Ne çok söz varmış. Şarkıyı kısaltalım.");
+        }
+    }
+}
 ```
 

@@ -29,11 +29,11 @@ mkdir infrastructure
 mkdir presentation
 
 cd core
-dotnet new classlib -f netstandard --name BalladMngr.Domain
-dotnet new classlib -f netstandard --name BalladMngr.Application
+dotnet new classlib -f netstandard2.1 --name BalladMngr.Domain
+dotnet new classlib -f netstandard2.1 --name BalladMngr.Application
 
 cd BalladMngr.Application
-dotnet add reference ..\BalladMngr.Domain\BalladMngr.Domain.csproj
+dotnet add reference ../BalladMngr.Domain/BalladMngr.Domain.csproj
 
 cd ..
 cd ..
@@ -43,12 +43,12 @@ dotnet new classlib -f net6.0 --name BalladMngr.Data
 dotnet new classlib -f net6.0 --name BalladMngr.Shared
 
 cd BalladMngr.Data
-dotnet add reference ..\..\core\BalladMngr.Domain\BalladMngr.Domain.csproj
-dotnet add reference ..\..\core\BalladMngr.Application\BalladMngr.Application.csproj
+dotnet add reference ../../core/BalladMngr.Domain/BalladMngr.Domain.csproj
+dotnet add reference ../../core/BalladMngr.Application/BalladMngr.Application.csproj
 
 cd ..
 cd BalladMngr.Shared
-dotnet add reference ..\..\core\BalladMngr.Application\BalladMngr.Application.csproj
+dotnet add reference ../../core/BalladMngr.Application/BalladMngr.Application.csproj
 
 cd ..
 cd ..
@@ -58,9 +58,9 @@ dotnet new webapi --name BalladMngr.WebApi
 
 cd BalladMngr.WebApi
 
-dotnet add reference ..\..\core\BalladMngr.Application\BalladMngr.Application.csproj
-dotnet add reference ..\..\infrastructure\BalladMngr.Data\BalladMngr.Data.csproj
-dotnet add reference ..\..\infrastructure\BalladMngr.Shared\BalladMngr.Shared.csproj
+dotnet add reference ../../core/BalladMngr.Application/BalladMngr.Application.csproj
+dotnet add reference ../../infrastructure/BalladMngr.Data/BalladMngr.Data.csproj
+dotnet add reference ../../infrastructure/BalladMngr.Shared/BalladMngr.Shared.csproj
 
 cd ..
 cd ..
@@ -102,12 +102,17 @@ mkdir Contexts
 dotnet ef migrations add InitialCreate --startup-project ..\..\presentation\Librarian.WebApi
 dotnet ef database update --startup-project ..\..\presentation\Librarian.WebApi
 
-# Vue Tarafının Oluşturulması
-npm install -g @vue/cli
+cd ..
+cd ..
 
+# Vue Tarafının Oluşturulması
+sudo npm install -g @vue/cli
+
+cd presentation
 # Presentation klasörü altındayken vue projesi oluşturulur
 vue create ballad-mngr-app
 
+cd ballad-mngr-app
 # ballad-mngr-app klasöründeyken aşağıdaki komut çalıştırılır
 vue add vuetify
 

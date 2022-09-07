@@ -119,7 +119,7 @@ vue create web-app
 # In dedicated config files seçili bırakılır
 
 # Material Design yaklaşımına uygun olarak vuetify kütüphanesi eklendi
-# librarian-app klasöründeyken aşağıdaki komut çalıştırılır
+# web-app klasöründeyken aşağıdaki komut çalıştırılır
 vue add vuetify
 
 # Default(recommended) ile ilerlenir
@@ -710,9 +710,6 @@ namespace BalladMngr.Application.Songs.Queries.ExportSongs
 
 Ama öncesinde ilgili Dto nesnesi de eklemeli.
 
-SongDto.cs
-
-```csharp
 SongDto.cs
 
 ```csharp

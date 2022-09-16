@@ -153,19 +153,30 @@ cd ..
 
 mkdir Queries
 cd Queries
-mkdir Export$ENTITY_NAMEs Get$ENTITY_NAMEs
+mkdir Export"$ENTITY_NAME"s Get"$ENTITY_NAME"s
 
+cd ..
 cd ..
 cd ..
 cd ..
 cd presentation
 
 printf "${YELLOW}Creating Vue Client${NC}\n\n"
+
+printf "${BLUE}Guide${NC}\n"
+printf "${CYAN}Please pick a preset: -> Manually select features${NC}\n"
+printf "${CYAN}Choose Vue Version -> 2.0${NC}\n"
+printf "${CYAN}Check the features needed for your project: -> Babel, Router, Vuew, Linter/Formatter${NC}\n"
+printf "${CYAN}Choose a version of Vue.js that you want to start the project with -> 2.x${NC}\n"
+printf "${CYAN}Use history mode for router? -> YES${NC}\n"
+printf "${CYAN}Pick a linter / formatter config -> ESLint + Prettier${NC}\n"
+printf "${CYAN}Pick additional lint features: -> Lint on save${NC}\n"
+printf "${CYAN}Where do you prefer placing config for Babel, ESLint, etc.? -> In dedicated config files${NC}\n"
+printf "${CYAN}Save this as a preset for future projects? -> NO${NC}\n"
+printf "${CYAN}Choose a preset -> Vuetify 2 - Vue CLI (recommended)${NC}\n"
+
 sudo npm install -g @vue/cli
-
-cd presentation
 npm install -g @vue/cli
-
 vue create web-app
-
+cd web-app
 vue add vuetify

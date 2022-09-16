@@ -8,6 +8,15 @@ Eğitim sırasında özellikle solution içeriğini oluşturmak ve projeler aras
 
 ![init_01.png](init_01.png)
 
+```bash
+# Ubuntu ortamımda dosyayı şu şekilde çalıştırdım
+sudo bash init.sh
+
+# Eğer klasörde yazma yetkileri gelmezse aşağıdaki gibi bir komut kullanılabilir
+# Ya da bunu parametrik olarak sh dosyası içerisine alabiliriz
+sudo chmod -R 777 Catalog/
+```
+
 ## Kontrol
 
 İlk etapta sistem dotnet yüklü mü değil mi kontrol etmek lazım. Yoksa [şu adrese gidip sistemimize kurabiliriz](https://dotnet.microsoft.com/en-us/download) Ardından aşağıdaki terminal komutu ile dotnet sdk'in yüklü olup olmadığına bakabiliriz.

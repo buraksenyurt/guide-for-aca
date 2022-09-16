@@ -2,6 +2,12 @@
 
 Applied Clean Architecture. Uygulamalı clean architecture eğitimlerinde kullanılmak üzere oluşturduğum repo. Basit ve hafifsiklet bir projenin temel enstrümanları ile uçtan uca hazırlanmasına yardımcı olan anlatımı içermektedir. Materyal Ubuntu 20.04 sistemini baz almaktadır. Örnek senaryo bir şarkı sözü yazarının bestelerini yönetmek üzerine kurgulanmıştır.
 
+## init.sh Dosyası ile Kolay Kurulum
+
+Eğitim sırasında özellikle solution içeriğini oluşturmak ve projeler arası bağlantıları kurup gerekli paket yüklemelerini gerçekleştirmek biraz zaman kaybına neden oldu. İşleri kolaylaştırmak adına init.sh isimli bir bash dosyası hazırladım. Terminalden bu dosyayı çalıştırınca istediğimiz adda ve istediğimiz ana konu nesnesine(book, song, product gibi) özel bir çözüm oluşturabiliyoruz.
+
+![init_01.png](init_01.png)
+
 ## Kontrol
 
 İlk etapta sistem dotnet yüklü mü değil mi kontrol etmek lazım. Yoksa [şu adrese gidip sistemimize kurabiliriz](https://dotnet.microsoft.com/en-us/download) Ardından aşağıdaki terminal komutu ile dotnet sdk'in yüklü olup olmadığına bakabiliriz.

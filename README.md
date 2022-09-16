@@ -1,6 +1,6 @@
 # Uygulamalı Clean Architecture - 101 _(Ubuntu Üstünde .Net 6 Odaklı)_
 
-Applied Clean Architecture. Uygulamalı clean architecture eğitimlerinde kullanılmak üzere oluşturduğum repo. Basit ve hafifsiklet bir projenin temel enstrümanları ile uçtan uca hazırlanmasına yardımcı olan anlatımı içermektedir. Materyal Ubuntu 20.04 sistemini baz almaktadır. Örnek senaryo bir şarkı sözü yazarının bestelerini yönetmek üzerine kurgulanmıştır.
+Applied Clean Architecture. Uygulamalı clean architecture eğitimlerinde kullanılmak üzere oluşturduğum repo. Basit ve hafifsiklet bir projenin temel enstrümanları ile uçtan uca hazırlanmasına yardımcı olan anlatımı içermektedir. Materyal Ubuntu 20.04 sistemini baz almaktadır. Örnek senaryo bir şarkı sözü yazarının bestelerini yönetmek üzerine kurgulanmıştır. Eğitimin süresi 6 dersle sınırlıdır bu nedenle Redis Cache, Serilog, JWT Token ile Authentication entegrasyonları ile proje bazlı Unit Test'ler eklenmemiştir. Referans olarak önceki sürümlerde geliştirilmiş olan [scaling-robot](https://github.com/buraksenyurt/scaling-robot) projesine bakılabilir.
 
 ## init.sh Dosyası ile Kolay Kurulum
 
@@ -125,7 +125,7 @@ vue create web-app
 # In dedicated config files seçili bırakılır
 
 # Material Design yaklaşımına uygun olarak vuetify kütüphanesi eklendi
-# librarian-app klasöründeyken aşağıdaki komut çalıştırılır
+# web-app klasöründeyken aşağıdaki komut çalıştırılır
 vue add vuetify
 
 # Default(recommended) ile ilerlenir
@@ -228,7 +228,7 @@ namespace BalladMngr.Domain.Settings
 }
 ```
 
-## 02 - MediatoR Paketinin Eklenmesi ve CQRS Hazırlıkları
+## 02 - MediatR Paketinin Eklenmesi ve CQRS Hazırlıkları
 
 ```shell
 cd core
@@ -716,9 +716,6 @@ namespace BalladMngr.Application.Songs.Queries.ExportSongs
 
 Ama öncesinde ilgili Dto nesnesi de eklemeli.
 
-SongDto.cs
-
-```csharp
 SongDto.cs
 
 ```csharp

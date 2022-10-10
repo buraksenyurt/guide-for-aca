@@ -159,9 +159,17 @@ cd ..
 cd ..
 cd ..
 cd ..
-cd presentation
+
+printf "${YELLOW}Cleaning Class1 files${NC}\n\n"
+rm core/$SOLUTION_NAME.Application/Class1.cs
+rm core/$SOLUTION_NAME.Domain/Class1.cs
+rm infrastructure/$SOLUTION_NAME.Data/Class1.cs
+rm infrastructure/$SOLUTION_NAME.Shared/Class1.cs
+rm presentation/$SOLUTION_NAME.WebApi/WeatherForecast.cs
+rm presentation/$SOLUTION_NAME.WebApi/Controllers/WeatherForecastController.cs
 
 printf "${YELLOW}Creating Vue Client${NC}\n\n"
+cd presentation
 
 printf "${BLUE}Guide${NC}\n"
 printf "${CYAN}Please pick a preset: -> Manually select features${NC}\n"

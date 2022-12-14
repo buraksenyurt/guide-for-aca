@@ -186,7 +186,7 @@ using BalladMngr.Domain.Enums;
 namespace BalladMngr.Domain.Entities
 {
      // Beste ile ilgili temel bilgileri içerir.
-    public class Book
+    public class Song
     {
         public int Id { get; set; }
         public string Title { get; set; }
@@ -382,7 +382,7 @@ namespace BalladMngr.Application.Common.Behaviors
             _validators = validators;
         }
 
-        public async Task<TResponse> Handle(TRequest request, CancellationToken cancellationToken, RequestHandlerDelegate<TResponse> next)
+        public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next,CancellationToken cancellationToken)
         {
             if (!_validators.Any())
                 return await next();
@@ -459,7 +459,7 @@ namespace BalladMngr.Application.Common.Behaviors
             _logger = logger;
             _hgwells = new Stopwatch();
         }
-        public async Task<TResponse> Handle(TRequest request, CancellationToken cancellationToken, RequestHandlerDelegate<TResponse> next)
+        public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
         {
             _hgwells.Start();
             var response = await next();
@@ -501,7 +501,7 @@ namespace BalladMngr.Application.Common.Behaviors
         {
             _logger = logger;
         }
-        public async Task<TResponse> Handle(TRequest request, CancellationToken cancellationToken, RequestHandlerDelegate<TResponse> next)
+        public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next,CancellationToken cancellationToken)
         {
             try
             {
@@ -2078,7 +2078,7 @@ DefaultContent.vue
         <div class="text-h2 my-4">Besteler Panosu</div>
         <div class="default-content">
             <div style="margin-right: 4rem; margin-bottom: 4rem">
-                <SongListCard @handleShowBooks="handleShowSongs" />
+                <SongListCard @handleShowSongs="handleShowSongs" />
                 <AddSongForm />
             </div>
         </div>
@@ -2107,7 +2107,7 @@ DefaultContent.vue
         },
         data: () => ({
             showSongs: false,
-            bookId: 0
+            songId: 0
         }),
         mounted() {
             this.getSongsAction();

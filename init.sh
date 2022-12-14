@@ -56,8 +56,8 @@ cd src
 mkdir core infrastructure presentation
 
 cd core
-dotnet new classlib -f net6.0 --name $SOLUTION_NAME.Domain
-dotnet new classlib -f net6.0 --name $SOLUTION_NAME.Application
+dotnet new classlib --name $SOLUTION_NAME.Domain
+dotnet new classlib --name $SOLUTION_NAME.Application
 
 cd $SOLUTION_NAME.Application
 dotnet add reference ../$SOLUTION_NAME.Domain/$SOLUTION_NAME.Domain.csproj
@@ -66,8 +66,8 @@ cd ..
 cd ..
 cd infrastructure
 
-dotnet new classlib -f net6.0 --name $SOLUTION_NAME.Data
-dotnet new classlib -f net6.0 --name $SOLUTION_NAME.Shared
+dotnet new classlib --name $SOLUTION_NAME.Data
+dotnet new classlib --name $SOLUTION_NAME.Shared
 
 cd $SOLUTION_NAME.Data
 dotnet add reference ../../core/$SOLUTION_NAME.Domain/$SOLUTION_NAME.Domain.csproj
@@ -77,6 +77,9 @@ cd ..
 cd $SOLUTION_NAME.Shared
 mkdir Services
 dotnet add reference ../../core/$SOLUTION_NAME.Application/$SOLUTION_NAME.Application.csproj
+dotnet add package CsvHelper
+dotnet add package MailKit
+dotnet add package MimeKit
 
 cd ..
 cd ..
@@ -168,6 +171,18 @@ rm infrastructure/$SOLUTION_NAME.Shared/Class1.cs
 rm presentation/$SOLUTION_NAME.WebApi/WeatherForecast.cs
 rm presentation/$SOLUTION_NAME.WebApi/Controllers/WeatherForecastController.cs
 
+printf "${YELLOW}Whould you create Vue App?(y/n)\n${NC}"
+read WEB_ANSWER
+
+if [ "$WEB_ANSWER" = "n" ];
+then	
+    cd ..
+    cd ..
+    sudo chmod -R 777 "$SOLUTION_NAME"
+    printf "${YELLOW}Bye bye${NC}\n"
+    exit
+fi
+
 printf "${YELLOW}Creating Vue Client${NC}\n\n"
 cd presentation
 
@@ -188,3 +203,9 @@ npm install -g @vue/cli
 vue create web-app
 cd web-app
 vue add vuetify
+cd ..
+cd ..
+cd ..
+cd ..
+
+sudo chmod -R 777 $SOLUTION_NAME
